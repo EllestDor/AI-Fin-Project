@@ -1,0 +1,14 @@
+# 忽略虚拟环境文件夹 (这东西好几百MB，千万别传)
+.venv/
+venv/
+env/
+
+# 忽略 Python 运行时生成的缓存垃圾
+__pycache__/
+*.pyc
+
+# 忽略可能包含 API Key 的环境配置文件
+.env
+
+# 忽略苹果系统的隐藏文件
+.DS_Store
