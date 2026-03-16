@@ -1,0 +1,15 @@
+[theme]
+# Deep background color extracted from high-end UI design
+backgroundColor = "#161d27"
+
+# Secondary background for elements like sidebar and selectbox
+secondaryBackgroundColor = "#1f2732"
+
+# Accent color (Champagne Gold) for interactive elements
+primaryColor = "#D1b06b" 
+
+# Default body text color (Soft gray to reduce eye strain)
+textColor = "#D7D7D7"
+
+# Base font category (Set to 'serif' to perfectly align with the Vollkorn CSS injection)
+font = "serif"
