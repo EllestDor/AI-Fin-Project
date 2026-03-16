@@ -2,9 +2,8 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 
-# 1. 构建我们的“全球资产大字典” (Dictionary)
-# 左边是你给板块起的名字，右边是真实的 ETF 代码
-# 终极全市场资产池 (涵盖 GICS 11大板块及其深度细分)
+# 1. 构建我们的“全球资产大字典” 
+# 左边为板块名，右边为ETF代码(涵盖 GICS 11大板块及其深度细分)
 # 1. 构建纯英文的全球资产大字典 (便于代码调用和后续多语言扩展)
 portfolio_universe = {
     # 1. 科技 (Information Technology)
@@ -76,7 +75,7 @@ portfolio_universe = {
     "Macro_Cmdty": "PDBC"
 }
 
-# 提取所有的 ETF 代码去下载
+# 提取所有的 ETF 代码下载
 tickers = list(portfolio_universe.values())
 print(f"准备抓取 {len(tickers)} 个全球核心板块数据，请稍候...")
 
@@ -109,15 +108,15 @@ for name, ticker in portfolio_universe.items():
 master_summary = pd.DataFrame(summary_list)
 master_summary.set_index("Sector", inplace=True)
 
-# 打印出这份极其专业的报告
+# 打印报告
 print("\n" + "="*50)
 print("全球大类及细分板块 风险/收益 终极体检报告")
 print("="*50)
 print(master_summary)
 
-# 6. 存下这些宝贵的数据！
+# 6. store data！
 master_summary.to_csv("data/processed/global_universe_summary.csv")
-# 注意：这行代码非常关键！我们把每天的涨跌幅存下来，用来做后面的“相关性矩阵”和“投资组合优化”
+# 注意：这行代码非常关键！把每天的涨跌幅存下来，用来做后面的“相关性矩阵”和“投资组合优化”
 daily_returns.to_csv("data/processed/global_universe_returns.csv")
 
 print("\n 太棒了！数据已成功保存为：")
