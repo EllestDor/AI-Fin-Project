@@ -3,9 +3,10 @@ import pandas as pd
 import plotly.express as px
 import numpy as np                      # 新增：用于高效的矩阵和随机数运算
 import plotly.graph_objects as go       # 新增：用于绘制极其精细的有效前沿散点图
+import yfinance as yf
 
 # 1. 网页全局设置 (扩展为宽屏模式)
-st.set_page_config(page_title="Global Macro Dashboard v1.1", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Global Macro Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # ==========================================
 # 2. Custom CSS
@@ -108,9 +109,14 @@ summary_data, returns_data = load_data()
 # ==========================================
 # 6. Tabs & Layout
 # ==========================================
-tab1, tab2, tab3 = st.tabs(["Interactive Heatmap ", "Risk/Return Database ", "Portfolio Optimization "])
+tab_pulse, tab_heatmap, tab_database, tab_opt = st.tabs([
+    "Live Market Pulse",     # main page
+    "Correlation Heatmap",  
+    "Risk/Return Database", 
+    "Portfolio Sandbox"      # effective frontier, optimized portfolio
+])
 
-with tab1:
+with tab_heatmap:
     # 1. 机构级分类目录 (Institutional-grade taxonomy)
     drilldown_dict = {
         "Macro Overview: 13 Core Global Assets": ['XLK', 'XLV', 'XLF', 'XLY', 'XLP', 'XLE', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC', 'TLT', 'GLD'],
@@ -151,7 +157,7 @@ with tab1:
     fig.update_layout(height=600, margin=dict(l=0, r=0, t=30, b=0))
     st.plotly_chart(fig, use_container_width=True)
 
-with tab2:
+with tab_database:
     st.subheader("Asset Risk & Return Summary")
     
     # 创建 Sector 详细名称映射字典
@@ -217,7 +223,7 @@ with tab2:
     # 在网页上渲染
     st.dataframe(display_data, use_container_width=True, height=500)
     
-with tab3:
+with tab_opt:
     # 1. 标题与说明
     st.markdown("### Markowitz Efficient Frontier & Portfolio Optimization")
     st.markdown("Simulate 5,000 random portfolios to find the optimal weights for Maximum Sharpe Ratio and Minimum Volatility.")
@@ -332,3 +338,78 @@ with tab3:
 
     else:
         st.warning("Please select at least 2 assets to run the optimization.")
+
+with tab_pulse:
+    st.markdown("### 🌐 Global Market Pulse & AI Takeaway")
+    
+    # 1. 定义要追踪的核心板块 (11大 GICS Sector 加上 黄金和长债)
+    market_tickers = {
+        'Technology': 'XLK', 'Healthcare': 'XLV', 'Financials': 'XLF',
+        'Consumer Discr': 'XLY', 'Consumer Staples': 'XLP', 'Energy': 'XLE',
+        'Industrials': 'XLI', 'Materials': 'XLB', 'Utilities': 'XLU',
+        'Real Estate': 'XLRE', 'Communications': 'XLC', 
+        'Safe Haven: Gold': 'GLD', 'Safe Haven: Bonds': 'TLT'
+    }
+    
+    # 2. 抓取近期数据 (使用缓存避免每次刷新太慢)
+    @st.cache_data(ttl=3600) # 缓存1小时
+    def fetch_live_performance():
+        tickers = list(market_tickers.values())
+        # 获取最近 5 个交易日的数据来计算周涨跌幅
+        data = yf.download(tickers, period="5d")['Close']
+        # 计算最新的一天相对 5 天前的涨跌幅
+        returns = (data.iloc[-1] - data.iloc[0]) / data.iloc[0]
+        return returns
+
+    with st.spinner("Fetching live market data..."):
+        try:
+            live_returns = fetch_live_performance()
+            
+            # 构建用于画图的 DataFrame
+            perf_df = pd.DataFrame({
+                'Sector': list(market_tickers.keys()),
+                'Ticker': list(market_tickers.values()),
+                'Performance': [live_returns[t] for t in market_tickers.values()]
+            })
+            
+            # 为了让树状图有大小区分，我们给所有板块相同的权重，或者用绝对值
+            perf_df['Weight'] = 1 
+            # 格式化显示标签
+            perf_df['Label'] = perf_df['Sector'] + "<br>" + perf_df['Performance'].apply(lambda x: f"{x*100:.2f}%")
+            
+            # 3. 动态生成 AI Takeaway 结论 (基于数据)
+            best_sector = perf_df.loc[perf_df['Performance'].idxmax()]
+            worst_sector = perf_df.loc[perf_df['Performance'].idxmin()]
+            
+            st.info(f"**💡 Quant Insight:** In the trailing 5 days, **{best_sector['Sector']}** is leading the market ({best_sector['Performance']*100:.2f}%), while **{worst_sector['Sector']}** is lagging. "
+                    f"Consider taking profits from overextended winners and exploring value in oversold sectors.")
+
+            # 4. 绘制 Bloomberg 风格的红绿 Treemap
+            fig_tree = px.treemap(
+                perf_df, 
+                path=[px.Constant("Global Macro Universe"), 'Label'], 
+                values='Weight',
+                color='Performance',
+                color_continuous_scale=['#FF4B4B', '#18181B', '#00C853'], # 红(跌) - 黑(平) - 绿(涨)
+                color_continuous_midpoint=0
+            )
+            
+            fig_tree.update_layout(
+                margin=dict(t=20, l=0, r=0, b=0),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                coloraxis_showscale=False # 隐藏色条让图更纯粹
+            )
+            
+            # 强制树状图里的文字居中和放大
+            fig_tree.update_traces(
+                textfont=dict(family="Vollkorn", size=18, color="white"),
+                textinfo="label",
+                hovertemplate="<b>%{label}</b><br>Return: %{color:.2%}<extra></extra>"
+            )
+            
+            st.plotly_chart(fig_tree, use_container_width=True)
+            
+        except Exception as e:
+            st.warning("Live data fetching is currently unavailable. Please check your internet connection or try again later.")
+            st.write(e)
