@@ -4,6 +4,8 @@ import plotly.express as px
 import numpy as np                      # 新增：用于高效的矩阵和随机数运算
 import plotly.graph_objects as go       # 新增：用于绘制极其精细的有效前沿散点图
 import yfinance as yf
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 # 1. 网页全局设置 (扩展为宽屏模式)
 st.set_page_config(page_title="Global Macro Dashboard", layout="wide", initial_sidebar_state="expanded")
@@ -260,117 +262,123 @@ with tab_database:
     st.dataframe(display_data, use_container_width=True, height=500)
     
 with tab_opt:
-    # 1. 标题与说明
-    st.markdown("### Markowitz Efficient Frontier & Portfolio Optimization")
-    st.markdown("Simulate 5,000 random portfolios to find the optimal weights for Maximum Sharpe Ratio and Minimum Volatility.")
+    st.markdown("### 🧪 AI-Augmented Portfolio Sandbox")
+    st.markdown("Simulate optimal portfolios using historical data **overlayed with real-time NLP Sentiment Alpha**.")
     
-    # 2. 让用户自由选择资产 (默认选三个经典的不相关资产：科技、长债、黄金)
-    all_tickers = returns_data.columns.tolist()
-    selected_assets = st.multiselect(
-        "Select Assets for Optimization:", 
-        all_tickers, 
-        default=['XLK', 'TLT', 'GLD']
-    )
+    # 1. 资产选择器与情绪因子开关
+    col_input1, col_input2 = st.columns([2, 1])
     
-    # 确保用户至少选了两个资产才能计算协方差
-    if len(selected_assets) >= 2:
-        # 3. 提取选中资产的日收益率，并计算年化预期收益和协方差矩阵
-        df_selected = returns_data[selected_assets]
-        mean_returns = df_selected.mean() * 252
-        cov_matrix = df_selected.cov() * 252
-        
-        # 4. 蒙特卡洛模拟 (Monte Carlo Simulation) 核心引擎
-        num_portfolios = 5000
-        # 创建空数组存放：波动率, 收益率, 夏普比率
-        results = np.zeros((3, num_portfolios))
-        weights_record = []
-        
-        for i in range(num_portfolios):
-            # 生成随机权重并归一化 (让权重和为1)
-            weights = np.random.random(len(selected_assets))
-            weights /= np.sum(weights)
-            weights_record.append(weights)
-            
-            # 计算组合预期收益
-            portfolio_return = np.sum(mean_returns * weights)
-            # 计算组合预期波动率 (核心矩阵运算: w^T * Cov * w)
-            portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-            
-            # 记录结果 (假设无风险利率 Risk-Free Rate 为 0)
-            results[0,i] = portfolio_std_dev
-            results[1,i] = portfolio_return
-            results[2,i] = portfolio_return / portfolio_std_dev
-            
-        # 5. 找出两大核心点：最大夏普比率 (Max Sharpe) 和 最小波动率 (Min Volatility)
-        max_sharpe_idx = np.argmax(results[2])
-        min_vol_idx = np.argmin(results[0])
-        
-        # 6. 利用 Plotly Graph Objects 绘制极具科技感的散点图
-        fig_opt = go.Figure()
-        
-        # 绘制 5000 个随机组合构成的有效前沿云图
-        fig_opt.add_trace(go.Scatter(
-            x=results[0,:], y=results[1,:],
-            mode='markers',
-            marker=dict(
-                size=5,
-                color=results[2,:], # 按夏普比率上色
-                colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(title="Sharpe Ratio")
-            ),
-            name='Simulated Portfolios',
-            hoverinfo='none' # 背景点关闭 hover 以免杂乱
-        ))
-        
-        # 标出 Max Sharpe 点 (红星)
-        fig_opt.add_trace(go.Scatter(
-            x=[results[0, max_sharpe_idx]], y=[results[1, max_sharpe_idx]],
-            mode='markers+text',
-            marker=dict(color='red', size=15, symbol='star'),
-            name='Max Sharpe',
-            text=['Max Sharpe'], textposition="top center"
-        ))
-        
-        # 标出 Min Volatility 点 (蓝星)
-        fig_opt.add_trace(go.Scatter(
-            x=[results[0, min_vol_idx]], y=[results[1, min_vol_idx]],
-            mode='markers+text',
-            marker=dict(color='blue', size=15, symbol='star'),
-            name='Min Volatility',
-            text=['Min Vol'], textposition="bottom center"
-        ))
-        
-        # 图表排版微调
-        fig_opt.update_layout(
-            xaxis_title="Annualized Volatility (Risk)",
-            yaxis_title="Annualized Return",
-            height=600,
-            margin=dict(l=0, r=0, t=30, b=0),
-            plot_bgcolor='rgba(0,0,0,0)', 
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color="#A1A1AA")
+    with col_input1:
+        all_tickers = returns_data.columns.tolist()
+        selected_assets = st.multiselect(
+            "Select Assets for Optimization:", 
+            all_tickers, 
+            default=['XLK', 'TLT', 'GLD', 'XLE']
         )
-        st.plotly_chart(fig_opt, use_container_width=True)
         
-        # 7. 在图表下方输出最优权重的数据表
-        st.markdown("### Optimal Portfolio Weights")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info("**Maximum Sharpe Ratio Portfolio (Highest Return/Risk)**")
-            max_sharpe_weights = weights_record[max_sharpe_idx]
-            df_max_sharpe = pd.DataFrame({'Asset': selected_assets, 'Weight': max_sharpe_weights})
-            df_max_sharpe['Weight'] = df_max_sharpe['Weight'].apply(lambda x: f"{x*100:.2f}%")
-            st.dataframe(df_max_sharpe.set_index('Asset'), use_container_width=True)
+    with col_input2:
+        # 给用户一个滑动条，决定“情绪得分”对最终收益率的影响有多大
+        alpha_weight = st.slider(
+            "NLP Sentiment Alpha Weight", 
+            min_value=0.0, max_value=0.1, value=0.05, step=0.01,
+            help="Higher value means the optimizer relies more on today's news sentiment. Set to 0 for pure historical optimization."
+        )
+
+    if len(selected_assets) >= 2:
+        with st.spinner("Running Monte Carlo Simulation with AI overlay..."):
+            # 2. 获取历史基础数据
+            df_selected = returns_data[selected_assets]
+            base_mean_returns = df_selected.mean() * 252
+            cov_matrix = df_selected.cov() * 252
             
-        with col2:
-            st.info("**Minimum Volatility Portfolio (Safest)**")
-            min_vol_weights = weights_record[min_vol_idx]
-            df_min_vol = pd.DataFrame({'Asset': selected_assets, 'Weight': min_vol_weights})
-            df_min_vol['Weight'] = df_min_vol['Weight'].apply(lambda x: f"{x*100:.2f}%")
-            st.dataframe(df_min_vol.set_index('Asset'), use_container_width=True)
+            # 3. 动态计算选中资产的当前情绪得分 (Alpha)
+            current_sentiments = {}
+            for ticker in selected_assets:
+                try:
+                    # 获取近期新闻（为保证速度，只看前3条）
+                    news = yf.Ticker(ticker).news[:3]
+                    if news:
+                        scores = [sia.polarity_scores(item.get('title', ''))['compound'] for item in news]
+                        current_sentiments[ticker] = np.mean(scores)
+                    else:
+                        current_sentiments[ticker] = 0.0 # 没新闻就视为中性
+                except:
+                    current_sentiments[ticker] = 0.0
+            
+            # 4. 核心数学转换：将情绪得分转化为预期收益的 Alpha 偏置
+            # 公式: 调整后收益 = 历史收益 + (情绪得分 * 权重)
+            adjusted_returns = base_mean_returns.copy()
+            for ticker in selected_assets:
+                alpha_boost = current_sentiments[ticker] * alpha_weight
+                adjusted_returns[ticker] += alpha_boost
+            
+            # 展示情绪得分情况
+            st.markdown("#### 📡 Real-time Sentiment Alpha Applied")
+            sentiment_df = pd.DataFrame.from_dict(current_sentiments, orient='index', columns=['NLP Score'])
+            sentiment_df['Alpha Boost'] = sentiment_df['NLP Score'] * alpha_weight
+            sentiment_df['Alpha Boost'] = sentiment_df['Alpha Boost'].apply(lambda x: f"{x*100:+.2f}%")
+            
+            # 使用更扁平的展示方式
+            st.dataframe(sentiment_df.T, use_container_width=True)
+
+            # 5. 蒙特卡洛模拟 (使用调整后的预期收益)
+            num_portfolios = 5000
+            results = np.zeros((3, num_portfolios))
+            weights_record = []
+            
+            for i in range(num_portfolios):
+                weights = np.random.random(len(selected_assets))
+                weights /= np.sum(weights)
+                weights_record.append(weights)
+                
+                # 注意这里使用的是 adjusted_returns 而不是 base_mean_returns！
+                portfolio_return = np.sum(adjusted_returns * weights)
+                portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+                
+                results[0,i] = portfolio_std_dev
+                results[1,i] = portfolio_return
+                results[2,i] = portfolio_return / portfolio_std_dev
+                
+            # 6. 提取最优解
+            max_sharpe_idx = np.argmax(results[2])
+            min_vol_idx = np.argmin(results[0])
+            
+            # 7. 绘制 Plotly 散点图
+            fig_opt = go.Figure()
+            
+            fig_opt.add_trace(go.Scatter(
+                x=results[0,:], y=results[1,:],
+                mode='markers',
+                marker=dict(size=4, color=results[2,:], colorscale='Viridis', showscale=True, colorbar=dict(title="Sharpe")),
+                name='Simulated Portfolios', hoverinfo='none'
+            ))
+            
+            fig_opt.add_trace(go.Scatter(
+                x=[results[0, max_sharpe_idx]], y=[results[1, max_sharpe_idx]],
+                mode='markers+text', marker=dict(color='#D4AF37', size=16, symbol='star'),
+                name='Max Sharpe', text=['Max Sharpe (AI-Adjusted)'], textposition="top center"
+            ))
+            
+            fig_opt.update_layout(
+                xaxis_title="Predicted Volatility (Risk)", yaxis_title="AI-Adjusted Expected Return",
+                height=500, margin=dict(l=0, r=0, t=30, b=0),
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color="#A1A1AA")
+            )
+            st.plotly_chart(fig_opt, use_container_width=True)
+            
+            # 8. 输出最优权重
+            col_ms, col_mv = st.columns(2)
+            with col_ms:
+                st.info("**🚀 AI-Max Sharpe Portfolio**")
+                df_max_sharpe = pd.DataFrame({'Asset': selected_assets, 'Weight': weights_record[max_sharpe_idx]})
+                df_max_sharpe['Weight'] = df_max_sharpe['Weight'].apply(lambda x: f"{x*100:.2f}%")
+                st.dataframe(df_max_sharpe.set_index('Asset'), use_container_width=True)
+                
+            with col_mv:
+                st.info("**🛡️ Min Volatility Portfolio**")
+                df_min_vol = pd.DataFrame({'Asset': selected_assets, 'Weight': weights_record[min_vol_idx]})
+                df_min_vol['Weight'] = df_min_vol['Weight'].apply(lambda x: f"{x*100:.2f}%")
+                st.dataframe(df_min_vol.set_index('Asset'), use_container_width=True)
 
     else:
         st.warning("Please select at least 2 assets to run the optimization.")
@@ -449,3 +457,95 @@ with tab_pulse:
         except Exception as e:
             st.warning("Live data fetching is currently unavailable. Please check your internet connection or try again later.")
             st.write(e)
+
+# ==========================================
+# 🌟 NLP 新闻情绪 Alpha 因子分析 (NLP Sentiment Alpha)
+# ==========================================
+    st.markdown("---")
+    st.markdown("### 🧠 AI NLP Sentiment Alpha Engine")
+    
+    # 1. 缓存加载 NLTK 的 VADER 词典，避免每次刷新重复下载
+    @st.cache_resource
+    def load_nlp_model():
+        try:
+            nltk.data.find('sentiment/vader_lexicon.zip')
+        except LookupError:
+            nltk.download('vader_lexicon', quiet=True)
+        return SentimentIntensityAnalyzer()
+
+     sia = load_nlp_model()
+
+    # 2. 交互式选择器：用户想看哪个板块的新闻情绪？
+    col_sel, col_space = st.columns([1, 2])
+    with col_sel:
+        target_sector = st.selectbox("Select Sector for Real-time News Analysis:", list(market_tickers.keys()))
+        target_ticker = market_tickers[target_sector]
+
+    # 3. 抓取新闻并进行 NLP 实时打分
+    with st.spinner(f"Scraping live headlines & calculating NLP scores for {target_ticker}..."):
+        try:
+            ticker_obj = yf.Ticker(target_ticker)
+            news_data = ticker_obj.news  # 抓取雅虎财经最新新闻
+            
+            if news_data:
+                sentiment_scores = []
+                news_items = []
+                
+                # 遍历最新的 5 条新闻
+                for item in news_data[:5]:
+                    title = item.get('title', '')
+                    publisher = item.get('publisher', 'Unknown')
+                    link = item.get('link', '#')
+                    
+                    # 核心：使用 VADER 对标题进行情绪打分 (-1 到 1)
+                    score = sia.polarity_scores(title)['compound']
+                    sentiment_scores.append(score)
+                    
+                    # 根据得分赋予视觉标签
+                    if score > 0.05:
+                        sentiment_label = "🟢 Bullish"
+                    elif score < -0.05:
+                        sentiment_label = "🔴 Bearish"
+                    else:
+                        sentiment_label = "⚪ Neutral"
+                        
+                    news_items.append(f"**[{publisher}]** [{title}]({link})  \n*AI Score: {score:.2f} ({sentiment_label})*")
+                
+                # 计算平均情绪得分作为 Alpha 因子
+                avg_score = np.mean(sentiment_scores)
+                
+                # 4. 渲染到网页：左边是新闻流，右边是情绪仪表盘
+                col_news, col_metric = st.columns([2, 1])
+                
+                with col_news:
+                    st.markdown("#### 📰 Live Headlines")
+                    for news in news_items:
+                        st.write(news)
+                        st.markdown("<hr style='margin: 0.5em 0; border-color: #3F3F46;'>", unsafe_allow_html=True)
+                
+                with col_metric:
+                    st.markdown("#### ⚡ Alpha Factor (Sentiment)")
+                    
+                    # 动态设定颜色和偏好
+                    if avg_score > 0.05:
+                        delta_text = "Bullish Momentum"
+                        delta_color = "normal"
+                    elif avg_score < -0.05:
+                        delta_text = "Bearish Pressure"
+                        delta_color = "inverse"
+                    else:
+                        delta_text = "Neutral"
+                        delta_color = "off"
+                        
+                    st.metric(label=f"{target_ticker} Sentiment Score", 
+                              value=f"{avg_score:.2f}", 
+                              delta=delta_text, 
+                              delta_color=delta_color)
+                              
+                    st.info(f"**How to use this Alpha?**\nA score of **{avg_score:.2f}** (ranging from -1 to 1) acts as a quantitative sentiment overlay. In our Portfolio Sandbox, this score will be mathematically added to the historical expected return of {target_ticker} to adjust optimal portfolio weights.")
+            else:
+                st.warning(f"No recent news found for {target_ticker} from the feed.")
+                
+        except Exception as e:
+            st.error(f"Failed to load NLP engine or fetch news. Error: {e}")
+
