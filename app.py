@@ -9,37 +9,75 @@ import yfinance as yf
 st.set_page_config(page_title="Global Macro Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # ==========================================
-# 2. Custom CSS
+# 2. Custom CSS for High-End Legal/Corporate Dark Mode
+#    (Powered by Vollkorn Font & Pill-shaped Hover Tabs)
 # ==========================================
 st.markdown("""
     <style>
     /* 0. 引入 Google Fonts 中的 Vollkorn 字体 */
     @import url('https://fonts.googleapis.com/css2?family=Vollkorn:ital,wght@0,400..900;1,400..900&display=swap');
 
-    /* 1. 全局字体设定：优先使用 Vollkorn，如果没有则降级到其他衬线字体 */
+    /* 1. 全局字体设定 */
     html, body, [class*="css"] {
         font-family: 'Vollkorn', Georgia, 'Times New Roman', Times, serif !important;
     }
 
-    /* 2. 主标题 (H1) - 使用 Vollkorn 展现经典的高级感 */
+    /* 2. 主标题 (H1) */
     h1 {
         color: #FFFFFF !important;
         font-weight: 700 !important;
-        font-size: 3rem !important; /* 衬线字体通常可以稍微放大一点 */
+        font-size: 3rem !important;
         letter-spacing: -0.01em !important;
         margin-bottom: 1.5rem !important;
     }
 
-    /* 3. 标签页 (Tabs) */
-    button[data-baseweb="tab"] > div {
-        font-family: 'Vollkorn', serif !important; /* 强制标签页也使用该字体 */
-        font-size: 1.25rem !important;
-        font-weight: 600 !important;
-        color: #71717A !important; 
-        padding-bottom: 0.5rem !important;
+    /* 3. 核心修复：Tabs 容器与胶囊式圆角按钮 */
+    div[data-testid="stTabs"] > div[role="tablist"] {
+        display: flex !important;
+        width: 100% !important;
+        justify-content: space-between !important; 
+        gap: 0.5rem !important; /* 设置按钮之间的间隔 */
+        border-bottom: none !important; /* 去除默认的整行下划线，让按钮更独立 */
+        padding-bottom: 1rem !important;
     }
+
+    /* 每个 Tab 按钮的基础样式：增加 padding 和 圆角 */
+    button[data-baseweb="tab"] {
+        flex: 1 !important; 
+        display: flex !important;
+        justify-content: center !important; 
+        align-items: center !important;
+        padding: 0.6rem 1rem !important; /* 给背景留出上下左右的呼吸空间 */
+        background-color: transparent !important; 
+        border-radius: 12px !important; /* 关键：12px 的圆角长方形 */
+        border: none !important; /* 覆盖 Streamlit 默认的底线 */
+        transition: all 0.25s ease-in-out !important; /* 关键：增加 0.25秒 的平滑色彩渐变动画 */
+    }
+
+    /* Tab 内部文字 */
+    button[data-baseweb="tab"] > div {
+        font-family: 'Vollkorn', serif !important;
+        font-size: 1.15rem !important;
+        font-weight: 600 !important;
+        color: #71717A !important; /* 默认暗灰色 */
+    }
+    
+    /* 🔥 鼠标悬停时的特效 (Hover) */
+    button[data-baseweb="tab"]:hover {
+        background-color: rgba(255, 255, 255, 0.08) !important; /* 鼠标移上去，泛起一层极具质感的浅色微光 */
+    }
+    
+    button[data-baseweb="tab"]:hover > div {
+        color: #D4D4D8 !important; /* 字体微微提亮 */
+    }
+
+    /* 🔥 选中状态的特效 (Selected) */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background-color: rgba(212, 175, 55, 0.15) !important; /* 选中时，背景变成淡淡的香槟金 */
+    }
+    
     button[data-baseweb="tab"][aria-selected="true"] > div {
-        color: #FFFFFF !important;
+        color: #FFFFFF !important; /* 文字变成纯白 */
         font-weight: 800 !important;
     }
 
@@ -52,13 +90,11 @@ st.markdown("""
         margin-bottom: 0.5rem !important;
     }
     
-    /* 下拉框本身的背景设定 */
+    /* 下拉框背景设定 */
     div[data-baseweb="select"] > div {
         background-color: #18181B !important;
         border: 1px solid #3F3F46 !important;
     }
-    
-    /* 强制下拉框内部选中的文字也使用 Vollkorn */
     div[data-baseweb="select"] span {
         font-family: 'Vollkorn', serif !important;
     }
