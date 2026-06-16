@@ -6,10 +6,10 @@ import plotly.graph_objects as go
 import yfinance as yf
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer  # type: ignore
-import random
+import requests
 import subprocess
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ==========================================
 # 1. 网页全局设置 (必须在最前面)
@@ -163,6 +163,22 @@ def load_nlp_model():
 
 sia = load_nlp_model()
 
+# 真实新闻抓取 (Finnhub Company News API)，按 ticker 缓存 30 分钟以避开免费额度限制
+NEWS_LOOKBACK_DAYS = 3
+
+@st.cache_data(ttl=1800)
+def fetch_ticker_headlines(ticker, api_key):
+    end = datetime.now().date()
+    start = end - timedelta(days=NEWS_LOOKBACK_DAYS)
+    resp = requests.get(
+        "https://finnhub.io/api/v1/company-news",
+        params={"symbol": ticker, "from": start.isoformat(), "to": end.isoformat(), "token": api_key},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    articles = resp.json()
+    return [a["headline"] for a in articles[:5] if a.get("headline")]
+
 # ==========================================
 # 4. Tabs Layout (调整顺序)
 # ==========================================
@@ -239,14 +255,37 @@ with tab_opt:
             base_mean_returns = df_selected_live.mean() * 252
             cov_matrix = df_selected_live.cov() * 252
             
-            # (暂时保留之前的通用模拟新闻池用于演示 NLP)
-            generic_news_pool = ["Market shows cautious optimism", "Sector experiences mild correction", "Analysts upgrade growth forecast"]
+            # 用 Finnhub 抓取每个 ticker 最近的真实新闻标题，再用 VADER 打分
+            # st.secrets 在完全没有 secrets.toml 时会抛 StreamlitSecretNotFoundError，而不是返回空字典
+            try:
+                finnhub_api_key = st.secrets.get("FINNHUB_API_KEY", "")
+            except Exception:
+                finnhub_api_key = ""
             current_sentiments = {}
+            headlines_by_ticker = {}
             for ticker in selected_opt_assets:
-                sampled_titles = random.sample(generic_news_pool, 2)
-                scores = [sia.polarity_scores(title)['compound'] for title in sampled_titles]
+                headlines = []
+                if finnhub_api_key:
+                    try:
+                        headlines = fetch_ticker_headlines(ticker, finnhub_api_key)
+                    except Exception:
+                        headlines = []
+                headlines_by_ticker[ticker] = headlines
+                scores = [sia.polarity_scores(h)['compound'] for h in headlines]
                 current_sentiments[ticker] = np.mean(scores) if scores else 0.0
-            
+
+            if not finnhub_api_key:
+                st.caption("⚠️ No FINNHUB_API_KEY found in secrets — sentiment alpha defaults to neutral (0.0). Add your key to .streamlit/secrets.toml (local) or the app's Secrets settings (Streamlit Cloud) to enable live news sentiment.")
+
+            with st.expander("📰 Headlines driving the sentiment alpha"):
+                for ticker in selected_opt_assets:
+                    st.markdown(f"**{ticker}** — avg sentiment: `{current_sentiments[ticker]:+.3f}`")
+                    if headlines_by_ticker[ticker]:
+                        for h in headlines_by_ticker[ticker]:
+                            st.caption(f"• {h}")
+                    else:
+                        st.caption("• No recent headlines found")
+
             adjusted_returns = base_mean_returns.copy()
             for ticker in selected_opt_assets:
                 adjusted_returns[ticker] += (current_sentiments[ticker] * alpha_weight)

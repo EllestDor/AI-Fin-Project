@@ -9,6 +9,7 @@ __pycache__/
 
 # 忽略可能包含 API Key 的环境配置文件
 .env
+.streamlit/secrets.toml
 
 # 忽略苹果系统的隐藏文件
 .DS_Store
