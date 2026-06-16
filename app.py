@@ -92,7 +92,9 @@ def fetch_and_calculate_live_data():
     raw_data = yf.download(tickers, period="1y")['Close']
     
     # 2. 实时计算日收益率
-    daily_returns = raw_data.pct_change().dropna()
+    # dropna(how="all") 只丢弃整行都缺失的日期；保留单个 ticker 偶发缺失的行，
+    # 让 mean/std/cov/corr 等统计量按列自动跳过 NaN，避免一个 ticker 的缺失拖垮全部数据
+    daily_returns = raw_data.pct_change().dropna(how="all")
     
     # 3. 实时计算年化收益率和波动率 (基于 252 个交易日)
     ann_return = daily_returns.mean() * 252
@@ -102,8 +104,8 @@ def fetch_and_calculate_live_data():
     summary_df = pd.DataFrame({
         'Sector': list(market_tickers.keys()),
         'Ticker': tickers,
-        'Ann_Return': [ann_return[t] for t in tickers],
-        'Volatility': [ann_volatility[t] for t in tickers]
+        'Ann_Return': ann_return.reindex(tickers).values,
+        'Volatility': ann_volatility.reindex(tickers).values
     })
     
     # 计算 Sharpe Ratio (假设无风险利率为 0.02)
@@ -151,13 +153,13 @@ tab_pulse, tab_heatmap, tab_opt, tab_database = st.tabs([
 with tab_pulse:
     st.markdown("### 🌐 Global Market Pulse")
     
-    # 计算近 5 日表现用于树状图
-    recent_5d_returns = (live_returns_df.iloc[-1] + 1) * (live_returns_df.iloc[-2] + 1) * (live_returns_df.iloc[-3] + 1) * (live_returns_df.iloc[-4] + 1) * (live_returns_df.iloc[-5] + 1) - 1
+    # 计算近 5 日表现用于树状图（向量化复利计算，自动适配可用交易日数量）
+    recent_5d_returns = (1 + live_returns_df.tail(5)).prod() - 1
     
     perf_df = pd.DataFrame({
         'Sector': list(market_tickers.keys()),
         'Ticker': list(market_tickers.values()),
-        'Performance': [recent_5d_returns[t] for t in market_tickers.values()]
+        'Performance': recent_5d_returns.reindex(market_tickers.values()).values
     })
     perf_df['Weight'] = 1 
     perf_df['Label'] = perf_df['Sector'] + "<br>" + perf_df['Performance'].apply(lambda x: f"{x*100:.2f}%")
@@ -226,23 +228,21 @@ with tab_opt:
                 adjusted_returns[ticker] += (current_sentiments[ticker] * alpha_weight)
             
             num_portfolios = 2000 # 减少模拟次数提高响应速度
-            results = np.zeros((3, num_portfolios))
-            weights_record = []
-            
-            for i in range(num_portfolios):
-                weights = np.random.random(len(selected_opt_assets))
-                weights /= np.sum(weights)
-                weights_record.append(weights)
-                
-                portfolio_return = np.sum(adjusted_returns * weights)
-                portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-                
-                results[0,i] = portfolio_std_dev
-                results[1,i] = portfolio_return
-                results[2,i] = portfolio_return / portfolio_std_dev
-                
+            n_assets = len(selected_opt_assets)
+
+            # Dirichlet(1,...,1) 才是在单纯形上的均匀采样；"均匀随机后归一化"会向等权组合偏移
+            weights_record = np.random.dirichlet(np.ones(n_assets), num_portfolios)
+
+            portfolio_returns = weights_record @ adjusted_returns.values
+            portfolio_variances = np.einsum('ij,jk,ik->i', weights_record, cov_matrix.values, weights_record)
+            portfolio_std_devs = np.sqrt(portfolio_variances)
+
+            results = np.vstack([portfolio_std_devs, portfolio_returns, portfolio_returns / portfolio_std_devs])
             max_sharpe_idx = np.argmax(results[2])
-            
+
+            best_weights = pd.Series(weights_record[max_sharpe_idx], index=selected_opt_assets)
+            st.markdown("**Max Sharpe Allocation:** " + ", ".join(f"{t}: {w*100:.1f}%" for t, w in best_weights.items()))
+
             fig_opt = go.Figure()
             fig_opt.add_trace(go.Scatter(x=results[0,:], y=results[1,:], mode='markers', marker=dict(size=4, color=results[2,:], colorscale='Viridis', showscale=True), name='Simulated Portfolios', hoverinfo='none'))
             fig_opt.add_trace(go.Scatter(x=[results[0, max_sharpe_idx]], y=[results[1, max_sharpe_idx]], mode='markers+text', marker=dict(color='#D4AF37', size=16, symbol='star'), name='Max Sharpe', text=['Max Sharpe'], textposition="top center"))
