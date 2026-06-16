@@ -1,12 +1,14 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import numpy as np                      
-import plotly.graph_objects as go       
+import numpy as np
+import plotly.graph_objects as go
 import yfinance as yf
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer  # type: ignore
 import random
+import subprocess
+import os
 from datetime import datetime
 
 # ==========================================
@@ -117,13 +119,35 @@ def fetch_and_calculate_live_data():
     
     return daily_returns, summary_df, update_time
 
+def get_deployed_version():
+    """读取当前部署所对应的 git commit，用于在侧边栏确认线上版本"""
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    try:
+        commit_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=repo_dir, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        commit_date = subprocess.check_output(
+            ["git", "log", "-1", "--format=%cd", "--date=format:%m/%d %H:%M"], cwd=repo_dir, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return commit_hash, commit_date
+    except Exception:
+        return "unknown", "unknown"
+
 with st.spinner("Initializing live market data engine..."):
     try:
         live_returns_df, live_summary_df, last_update_str = fetch_and_calculate_live_data()
-        
+
         # 在侧边栏显示更新时间
         st.sidebar.success(f"🟢 Live Data Active\n\nLast Updated: \n{last_update_str}")
-        
+
+        if st.sidebar.button("🔄 Refresh Live Data", use_container_width=True):
+            fetch_and_calculate_live_data.clear()
+            st.rerun()
+
+        commit_hash, commit_date = get_deployed_version()
+        st.sidebar.caption(f"Build `{commit_hash}` · committed {commit_date}")
+        st.sidebar.divider()
+
     except Exception as e:
         st.error(f"Failed to fetch live data from Yahoo Finance. Please try again later. Error: {e}")
         st.stop() # 如果数据抓取失败，停止渲染后续内容
@@ -240,25 +264,46 @@ with tab_opt:
             results = np.vstack([portfolio_std_devs, portfolio_returns, portfolio_returns / portfolio_std_devs])
             max_sharpe_idx = np.argmax(results[2])
 
-            best_weights = pd.Series(weights_record[max_sharpe_idx], index=selected_opt_assets)
-            st.markdown("**Max Sharpe Allocation:** " + ", ".join(f"{t}: {w*100:.1f}%" for t, w in best_weights.items()))
+            best_weights = pd.Series(weights_record[max_sharpe_idx], index=selected_opt_assets).sort_values()
 
             fig_opt = go.Figure()
             fig_opt.add_trace(go.Scatter(x=results[0,:], y=results[1,:], mode='markers', marker=dict(size=4, color=results[2,:], colorscale='Viridis', showscale=True), name='Simulated Portfolios', hoverinfo='none'))
             fig_opt.add_trace(go.Scatter(x=[results[0, max_sharpe_idx]], y=[results[1, max_sharpe_idx]], mode='markers+text', marker=dict(color='#D4AF37', size=16, symbol='star'), name='Max Sharpe', text=['Max Sharpe'], textposition="top center"))
             fig_opt.update_layout(xaxis_title="Predicted Volatility (Risk)", yaxis_title="AI-Adjusted Expected Return", height=400, margin=dict(l=0, r=0, t=30, b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color=text_color))
-            st.plotly_chart(fig_opt, use_container_width=True)
+
+            fig_weights = go.Figure(go.Bar(
+                x=best_weights.values * 100, y=best_weights.index, orientation='h',
+                marker=dict(color='#D4AF37'),
+                text=[f"{w*100:.1f}%" for w in best_weights.values], textposition='outside'
+            ))
+            # 给最长的条形留出空间，避免标签被裁掉
+            fig_weights.update_xaxes(range=[0, best_weights.values.max() * 100 * 1.25])
+            fig_weights.update_layout(title="Max Sharpe Allocation", xaxis_title="Weight (%)", height=400, margin=dict(l=0, r=20, t=40, b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color=text_color))
+
+            col_frontier, col_weights = st.columns([2, 1])
+            with col_frontier:
+                st.plotly_chart(fig_opt, use_container_width=True)
+            with col_weights:
+                st.plotly_chart(fig_weights, use_container_width=True)
 
 # ----------------- Tab 4: Database -----------------
 with tab_database:
     st.markdown("### 📊 Live Asset Risk & Return Summary")
     st.markdown("Metrics calculated dynamically based on the trailing 1-year daily close prices.")
     
-    # 格式化显示
-    display_data = live_summary_df.copy()
-    display_data['Ann_Return'] = display_data['Ann_Return'].apply(lambda x: f"{x*100:.2f}%")
-    display_data['Volatility'] = display_data['Volatility'].apply(lambda x: f"{x*100:.2f}%")
-    display_data['Sharpe_Ratio'] = display_data['Sharpe_Ratio'].apply(lambda x: f"{x:.2f}")
-    
-    display_data.set_index('Sector', inplace=True)
-    st.dataframe(display_data, use_container_width=True, height=500)
+    # 保持数值类型（而非格式化字符串），这样点击表头才能按数值正确排序；
+    # 显示格式交给 column_config 处理
+    display_data = live_summary_df.sort_values('Sharpe_Ratio', ascending=False).set_index('Sector').copy()
+    display_data['Ann_Return'] *= 100
+    display_data['Volatility'] *= 100
+
+    st.dataframe(
+        display_data,
+        use_container_width=True,
+        height=500,
+        column_config={
+            "Ann_Return": st.column_config.NumberColumn("Ann. Return", format="%.2f%%"),
+            "Volatility": st.column_config.NumberColumn("Volatility", format="%.2f%%"),
+            "Sharpe_Ratio": st.column_config.NumberColumn("Sharpe Ratio", format="%.2f"),
+        }
+    )
