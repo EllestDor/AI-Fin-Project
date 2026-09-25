@@ -71,14 +71,28 @@ else:
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vollkorn:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
     /* ── Base ─────────────────────────────────────────────── */
     .stApp {{ background-color: {bg_color} !important; }}
 
+    /* Apply Inter to text nodes only — exclude span so icon glyphs aren't broken */
     html, body, [class*="css"],
-    p, span, div, li, td, th, label, input, textarea, select {{
+    p, div, li, td, th, label, input, textarea, select {{
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         color: {text_color} !important;
+    }}
+    /* Restore Material Symbols/Icons after the broad override above */
+    .material-symbols-outlined,
+    .material-icons,
+    span.material-symbols-outlined,
+    span.material-icons {{
+        font-family: 'Material Symbols Outlined', 'Material Icons' !important;
+        font-feature-settings: 'liga' !important;
+        -webkit-font-feature-settings: 'liga' !important;
+        font-style: normal !important;
+        font-weight: normal !important;
+        color: inherit !important;
     }}
 
     /* ── Page title — responsive, clear of sidebar arrow ──── */
@@ -265,6 +279,21 @@ st.markdown(f"""
         }}
         [data-testid="stMetric"] {{ padding: 0.65rem 0.75rem !important; }}
         [data-testid="stMetricValue"] {{ font-size: 1rem !important; }}
+    }}
+
+    /* ── Icon-font exception — last rule wins the cascade ─── */
+    /* Resets font-family for every element that renders a glyph via
+       an icon font (Material Icons, BaseWeb icons, inline SVGs, and
+       any Streamlit element whose data-testid contains "Icon").
+       Placed last so it overrides the broad [class*="css"] rule above
+       at equal !important specificity. */
+    [data-testid="stExpanderIcon"],
+    [data-testid*="Icon"],
+    [data-baseweb="icon"],
+    svg,
+    [class*="material-icons"],
+    [class*="material-symbols"] {{
+        font-family: initial !important;
     }}
     </style>
 """, unsafe_allow_html=True)
