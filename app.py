@@ -80,10 +80,31 @@ st.markdown(f"""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         color: {text_color} !important;
     }}
-    h1, h2, h3, h4, h5, h6, .stTitle {{
+
+    /* ── Page title — responsive, clear of sidebar arrow ──── */
+    h1 {{
         font-family: 'Vollkorn', Georgia, serif !important;
+        font-size: clamp(1.25rem, 3vw, 1.9rem) !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.01em !important;
         color: {text_color} !important;
-        letter-spacing: -0.02em !important;
+        /* right gap keeps text away from the sidebar collapse arrow */
+        padding-right: 3rem !important;
+        margin-bottom: 1.25rem !important;
+        word-spacing: 0.06em !important;
+    }}
+
+    /* ── Section headings (### with emoji) ────────────────── */
+    h2, h3, h4, h5, h6 {{
+        font-family: 'Vollkorn', Georgia, serif !important;
+        font-size: clamp(0.95rem, 2vw, 1.15rem) !important;
+        line-height: 1.4 !important;
+        letter-spacing: -0.005em !important;
+        color: {text_color} !important;
+        /* word-spacing pushes emoji glyphs away from adjacent text */
+        word-spacing: 0.12em !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.6rem !important;
     }}
 
     /* ── Sidebar ──────────────────────────────────────────── */
@@ -95,18 +116,23 @@ st.markdown(f"""
     [data-testid="stSidebar"] span,
     [data-testid="stSidebar"] label {{
         color: {sub_text_color} !important;
+        font-size: 0.85rem !important;
     }}
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3 {{
         color: {text_color} !important;
+        font-size: clamp(1rem, 2vw, 1.2rem) !important;
+        word-spacing: normal !important;
+        padding-right: 0 !important;
     }}
 
     /* ── Caption / helper text ────────────────────────────── */
     [data-testid="stCaptionContainer"] p,
     .stCaption, small {{
         color: {sub_text_color} !important;
-        font-size: 0.82rem !important;
+        font-size: 0.78rem !important;
+        line-height: 1.5 !important;
     }}
 
     /* ── Metric cards ─────────────────────────────────────── */
@@ -114,29 +140,63 @@ st.markdown(f"""
         background-color: {card_bg} !important;
         border: 1px solid {border_color} !important;
         border-radius: 10px !important;
-        padding: 1rem 1.25rem !important;
+        padding: 0.85rem 1rem !important;
     }}
-    [data-testid="stMetricLabel"] p {{ color: {sub_text_color} !important; font-size: 0.78rem !important; text-transform: uppercase !important; letter-spacing: 0.06em !important; }}
-    [data-testid="stMetricValue"]   {{ color: {text_color} !important; font-size: 1.6rem !important; font-weight: 700 !important; }}
+    [data-testid="stMetricLabel"] p {{
+        color: {sub_text_color} !important;
+        font-size: 0.72rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.07em !important;
+        white-space: nowrap !important;
+    }}
+    [data-testid="stMetricValue"] {{
+        color: {text_color} !important;
+        font-size: clamp(1.1rem, 3vw, 1.5rem) !important;
+        font-weight: 700 !important;
+        white-space: nowrap !important;
+    }}
 
-    /* ── Tabs ─────────────────────────────────────────────── */
+    /* ── Tab bar — scrollable on narrow screens ───────────── */
     div[data-testid="stTabs"] > div[role="tablist"] {{
-        display: flex !important; width: 100% !important;
-        justify-content: space-between !important;
-        gap: 0.4rem !important; border-bottom: 1px solid {border_color} !important;
-        padding-bottom: 0 !important; margin-bottom: 1.5rem !important;
+        display: flex !important;
+        width: 100% !important;
+        /* natural width per tab; scrollable rather than squeezed */
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        gap: 0.15rem !important;
+        border-bottom: 1px solid {border_color} !important;
+        padding-bottom: 0 !important;
+        margin-bottom: 1.5rem !important;
+    }}
+    div[data-testid="stTabs"] > div[role="tablist"]::-webkit-scrollbar {{
+        display: none !important;
     }}
     button[data-baseweb="tab"] {{
-        flex: 1 !important; display: flex !important;
-        justify-content: center !important; align-items: center !important;
-        padding: 0.55rem 0.75rem !important; background-color: transparent !important;
-        border-radius: 8px 8px 0 0 !important; border: none !important;
+        /* don't stretch to fill — keeps labels from crowding */
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        padding: 0.45rem 0.7rem !important;
+        background-color: transparent !important;
+        border-radius: 6px 6px 0 0 !important;
+        border: none !important;
         border-bottom: 2px solid transparent !important;
-        transition: all 0.2s ease !important;
+        transition: all 0.18s ease !important;
+        white-space: nowrap !important;
     }}
     button[data-baseweb="tab"] > div {{
-        font-size: 0.9rem !important; font-weight: 500 !important;
-        color: {sub_text_color} !important; font-family: 'Inter', sans-serif !important;
+        font-size: 0.78rem !important;
+        font-weight: 500 !important;
+        color: {sub_text_color} !important;
+        font-family: 'Inter', sans-serif !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 18ch !important;
     }}
     button[data-baseweb="tab"]:hover {{
         background-color: {tab_hover} !important;
@@ -147,17 +207,20 @@ st.markdown(f"""
         border-bottom: 2px solid {accent} !important;
     }}
     button[data-baseweb="tab"][aria-selected="true"] > div {{
-        color: {text_color} !important; font-weight: 700 !important;
+        color: {text_color} !important;
+        font-weight: 700 !important;
     }}
 
     /* ── Inputs & selects ─────────────────────────────────── */
     div[data-testid="stSelectbox"] label p,
     div[data-testid="stMultiSelect"] label p,
     div[data-testid="stSlider"] label p {{
-        font-size: 0.85rem !important; font-weight: 600 !important;
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
         color: {sub_text_color} !important;
-        text-transform: uppercase !important; letter-spacing: 0.05em !important;
-        margin-bottom: 0.3rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        margin-bottom: 0.25rem !important;
     }}
     div[data-baseweb="select"] > div {{
         background-color: {input_bg} !important;
@@ -173,14 +236,36 @@ st.markdown(f"""
         background-color: {card_bg} !important;
     }}
     [data-testid="stExpander"] summary p {{
-        color: {text_color} !important; font-weight: 600 !important;
+        color: {text_color} !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
     }}
 
     /* ── Info / warning / success banners ─────────────────── */
-    [data-testid="stAlert"] p {{ color: {text_color} !important; }}
+    [data-testid="stAlert"] p {{
+        color: {text_color} !important;
+        font-size: 0.85rem !important;
+        line-height: 1.55 !important;
+    }}
 
     /* ── Dataframe ────────────────────────────────────────── */
-    [data-testid="stDataFrame"] {{ border-radius: 10px !important; overflow: hidden !important; }}
+    [data-testid="stDataFrame"] {{
+        border-radius: 10px !important;
+        overflow: hidden !important;
+    }}
+
+    /* ── Mobile breakpoint (≤ 640 px) ────────────────────── */
+    @media (max-width: 640px) {{
+        h1 {{ font-size: 1.15rem !important; padding-right: 2.5rem !important; }}
+        h2, h3 {{ font-size: 0.95rem !important; }}
+        button[data-baseweb="tab"] {{ padding: 0.4rem 0.5rem !important; }}
+        button[data-baseweb="tab"] > div {{
+            font-size: 0.7rem !important;
+            max-width: 12ch !important;
+        }}
+        [data-testid="stMetric"] {{ padding: 0.65rem 0.75rem !important; }}
+        [data-testid="stMetricValue"] {{ font-size: 1rem !important; }}
+    }}
     </style>
 """, unsafe_allow_html=True)
 
