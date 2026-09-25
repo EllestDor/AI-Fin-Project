@@ -144,8 +144,8 @@ st.markdown(f"""
     [data-testid="stSidebar"] h1 {{
         color: {text_color} !important;
         font-family: 'Vollkorn', Georgia, serif !important;
-        /* Scale up to a clear title size; clamp prevents overflow on narrow sidebars */
-        font-size: clamp(1.5rem, 10cqi, 2rem) !important;
+        /* Match the h3 section-heading size used by "Global Market Pulse" */
+        font-size: clamp(0.95rem, 2vw, 1.15rem) !important;
         font-weight: 700 !important;
         line-height: 1.15 !important;
         letter-spacing: -0.01em !important;
