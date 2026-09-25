@@ -144,8 +144,8 @@ st.markdown(f"""
     [data-testid="stSidebar"] h1 {{
         color: {text_color} !important;
         font-family: 'Vollkorn', Georgia, serif !important;
-        /* Match the h3 section-heading size used by "Global Market Pulse" */
-        font-size: clamp(0.95rem, 2vw, 1.15rem) !important;
+        /* 1.75rem = Streamlit's native h3 size, matching "Global Market Pulse" */
+        font-size: 1.75rem !important;
         font-weight: 700 !important;
         line-height: 1.15 !important;
         letter-spacing: -0.01em !important;
