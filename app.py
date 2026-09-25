@@ -46,19 +46,21 @@ st.sidebar.divider()
 theme_choice = st.sidebar.radio("UI Theme:", ["Dark Mode 🌙", "Light Mode ☀️"])
 
 if theme_choice == "Dark Mode 🌙":
-    bg_color       = "#0E1117"
-    text_color     = "#FFFFFF"
-    sub_text_color = "#D4D4D8"
-    tab_hover      = "rgba(255, 255, 255, 0.08)"
-    tab_selected   = "rgba(212, 175, 55, 0.15)"
-    select_bg      = "#18181B"
+    # Deep cool-navy base — softer than pure black, easier on the eyes
+    bg_color       = "#13161E"
+    text_color     = "#E4E1D9"   # warm off-white, less glaring than #FFF
+    sub_text_color = "#9191A0"
+    tab_hover      = "rgba(255, 255, 255, 0.06)"
+    tab_selected   = "rgba(212, 175, 55, 0.16)"
+    select_bg      = "#1B1E29"
 else:
-    bg_color       = "#F4F4F5"
-    text_color     = "#18181B"
-    sub_text_color = "#3F3F46"
+    # Warm linen/cream — cuts the harshness of near-white backgrounds
+    bg_color       = "#F0EBE3"
+    text_color     = "#1E1C1A"   # dark warm brown, not pure black
+    sub_text_color = "#6B6460"
     tab_hover      = "rgba(0, 0, 0, 0.05)"
-    tab_selected   = "rgba(212, 175, 55, 0.2)"
-    select_bg      = "#FFFFFF"
+    tab_selected   = "rgba(180, 138, 30, 0.14)"
+    select_bg      = "#E6DFD6"
 
 st.markdown(f"""
     <style>
