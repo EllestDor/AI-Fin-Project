@@ -46,70 +46,141 @@ st.sidebar.divider()
 theme_choice = st.sidebar.radio("UI Theme:", ["Dark Mode 🌙", "Light Mode ☀️"])
 
 if theme_choice == "Dark Mode 🌙":
-    # Deep cool-navy base — softer than pure black, easier on the eyes
-    bg_color       = "#13161E"
-    text_color     = "#E4E1D9"   # warm off-white, less glaring than #FFF
-    sub_text_color = "#9191A0"
-    tab_hover      = "rgba(255, 255, 255, 0.06)"
-    tab_selected   = "rgba(212, 175, 55, 0.16)"
-    select_bg      = "#1B1E29"
+    bg_color       = "#0D1117"   # GitHub-dark base
+    sidebar_bg     = "#161B22"
+    card_bg        = "#161B22"
+    border_color   = "#30363D"
+    text_color     = "#E6EDF3"   # GitHub-dark primary text
+    sub_text_color = "#8B949E"   # GitHub-dark secondary text
+    input_bg       = "#21262D"
+    tab_hover      = "rgba(255,255,255,0.07)"
+    tab_selected   = "rgba(212,175,55,0.18)"
+    accent         = "#D4AF37"
 else:
-    # Warm linen/cream — cuts the harshness of near-white backgrounds
-    bg_color       = "#F0EBE3"
-    text_color     = "#1E1C1A"   # dark warm brown, not pure black
-    sub_text_color = "#6B6460"
-    tab_hover      = "rgba(0, 0, 0, 0.05)"
-    tab_selected   = "rgba(180, 138, 30, 0.14)"
-    select_bg      = "#E6DFD6"
+    bg_color       = "#FFFFFF"
+    sidebar_bg     = "#F6F6F4"   # Claude-style off-white sidebar
+    card_bg        = "#F9F9F7"
+    border_color   = "#E5E5E3"
+    text_color     = "#1A1A1A"   # near-black — maximum readability
+    sub_text_color = "#555555"   # solid mid-gray, clearly readable on white
+    input_bg       = "#F0F0EE"
+    tab_hover      = "rgba(0,0,0,0.05)"
+    tab_selected   = "rgba(180,138,30,0.12)"
+    accent         = "#B8920A"   # slightly darker gold for light bg legibility
 
 st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Vollkorn:ital,wght@0,400..900;1,400..900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vollkorn:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 
+    /* ── Base ─────────────────────────────────────────────── */
     .stApp {{ background-color: {bg_color} !important; }}
-    html, body, [class*="css"] {{
-        font-family: 'Vollkorn', Georgia, 'Times New Roman', Times, serif !important;
+
+    html, body, [class*="css"],
+    p, span, div, li, td, th, label, input, textarea, select {{
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         color: {text_color} !important;
     }}
-    h1, h2, h3, h4, h5, h6 {{
+    h1, h2, h3, h4, h5, h6, .stTitle {{
+        font-family: 'Vollkorn', Georgia, serif !important;
         color: {text_color} !important;
-        font-family: 'Vollkorn', serif !important;
+        letter-spacing: -0.02em !important;
     }}
 
+    /* ── Sidebar ──────────────────────────────────────────── */
+    [data-testid="stSidebar"] > div:first-child {{
+        background-color: {sidebar_bg} !important;
+        border-right: 1px solid {border_color} !important;
+    }}
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] label {{
+        color: {sub_text_color} !important;
+    }}
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {{
+        color: {text_color} !important;
+    }}
+
+    /* ── Caption / helper text ────────────────────────────── */
+    [data-testid="stCaptionContainer"] p,
+    .stCaption, small {{
+        color: {sub_text_color} !important;
+        font-size: 0.82rem !important;
+    }}
+
+    /* ── Metric cards ─────────────────────────────────────── */
+    [data-testid="stMetric"] {{
+        background-color: {card_bg} !important;
+        border: 1px solid {border_color} !important;
+        border-radius: 10px !important;
+        padding: 1rem 1.25rem !important;
+    }}
+    [data-testid="stMetricLabel"] p {{ color: {sub_text_color} !important; font-size: 0.78rem !important; text-transform: uppercase !important; letter-spacing: 0.06em !important; }}
+    [data-testid="stMetricValue"]   {{ color: {text_color} !important; font-size: 1.6rem !important; font-weight: 700 !important; }}
+
+    /* ── Tabs ─────────────────────────────────────────────── */
     div[data-testid="stTabs"] > div[role="tablist"] {{
         display: flex !important; width: 100% !important;
         justify-content: space-between !important;
-        gap: 0.5rem !important; border-bottom: none !important;
-        padding-bottom: 1rem !important;
+        gap: 0.4rem !important; border-bottom: 1px solid {border_color} !important;
+        padding-bottom: 0 !important; margin-bottom: 1.5rem !important;
     }}
     button[data-baseweb="tab"] {{
         flex: 1 !important; display: flex !important;
         justify-content: center !important; align-items: center !important;
-        padding: 0.6rem 1rem !important; background-color: transparent !important;
-        border-radius: 12px !important; border: none !important;
-        transition: all 0.25s ease-in-out !important;
+        padding: 0.55rem 0.75rem !important; background-color: transparent !important;
+        border-radius: 8px 8px 0 0 !important; border: none !important;
+        border-bottom: 2px solid transparent !important;
+        transition: all 0.2s ease !important;
     }}
     button[data-baseweb="tab"] > div {{
-        font-size: 1.15rem !important; font-weight: 600 !important;
-        color: {sub_text_color} !important;
+        font-size: 0.9rem !important; font-weight: 500 !important;
+        color: {sub_text_color} !important; font-family: 'Inter', sans-serif !important;
     }}
-    button[data-baseweb="tab"]:hover {{ background-color: {tab_hover} !important; }}
+    button[data-baseweb="tab"]:hover {{
+        background-color: {tab_hover} !important;
+    }}
     button[data-baseweb="tab"]:hover > div {{ color: {text_color} !important; }}
     button[data-baseweb="tab"][aria-selected="true"] {{
-        background-color: {tab_selected} !important;
+        background-color: transparent !important;
+        border-bottom: 2px solid {accent} !important;
     }}
     button[data-baseweb="tab"][aria-selected="true"] > div {{
-        color: {text_color} !important; font-weight: 800 !important;
+        color: {text_color} !important; font-weight: 700 !important;
     }}
 
-    div[data-testid="stSelectbox"] label p {{
-        font-size: 1.2rem !important; font-weight: 700 !important;
-        color: {text_color} !important; margin-bottom: 0.5rem !important;
+    /* ── Inputs & selects ─────────────────────────────────── */
+    div[data-testid="stSelectbox"] label p,
+    div[data-testid="stMultiSelect"] label p,
+    div[data-testid="stSlider"] label p {{
+        font-size: 0.85rem !important; font-weight: 600 !important;
+        color: {sub_text_color} !important;
+        text-transform: uppercase !important; letter-spacing: 0.05em !important;
+        margin-bottom: 0.3rem !important;
     }}
     div[data-baseweb="select"] > div {{
-        background-color: {select_bg} !important; border: 1px solid #3F3F46 !important;
+        background-color: {input_bg} !important;
+        border: 1px solid {border_color} !important;
+        border-radius: 8px !important;
     }}
-    [data-testid="stSidebar"] p {{ color: {sub_text_color} !important; }}
+    div[data-baseweb="select"] span {{ color: {text_color} !important; }}
+
+    /* ── Expander ─────────────────────────────────────────── */
+    [data-testid="stExpander"] {{
+        border: 1px solid {border_color} !important;
+        border-radius: 10px !important;
+        background-color: {card_bg} !important;
+    }}
+    [data-testid="stExpander"] summary p {{
+        color: {text_color} !important; font-weight: 600 !important;
+    }}
+
+    /* ── Info / warning / success banners ─────────────────── */
+    [data-testid="stAlert"] p {{ color: {text_color} !important; }}
+
+    /* ── Dataframe ────────────────────────────────────────── */
+    [data-testid="stDataFrame"] {{ border-radius: 10px !important; overflow: hidden !important; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -274,8 +345,8 @@ with tab_opt:
 
             if not finnhub_key:
                 st.caption(
-                    "⚠️ No FINNHUB_API_KEY found — sentiment alpha defaults to 0.0. "
-                    "Add your key to `.streamlit/secrets.toml` to enable live news sentiment."
+                    "Headlines sourced from Yahoo Finance. "
+                    "Add a FINNHUB_API_KEY to `.streamlit/secrets.toml` for a broader news feed."
                 )
 
             with st.expander("📰 Headlines driving the sentiment alpha"):

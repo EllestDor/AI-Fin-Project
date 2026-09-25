@@ -80,7 +80,7 @@ def load_nlp_model() -> SentimentIntensityAnalyzer:
 
 
 @st.cache_data(ttl=1800)
-def fetch_ticker_headlines(ticker: str, api_key: str) -> list[str]:
+def fetch_ticker_headlines_finnhub(ticker: str, api_key: str) -> list[str]:
     """Return up to 5 recent headlines for *ticker* via Finnhub."""
     end   = datetime.now().date()
     start = end - timedelta(days=NEWS_LOOKBACK_DAYS)
@@ -99,27 +99,50 @@ def fetch_ticker_headlines(ticker: str, api_key: str) -> list[str]:
     return [a["headline"] for a in articles[:5] if a.get("headline")]
 
 
+@st.cache_data(ttl=1800)
+def fetch_ticker_headlines_yf(ticker: str) -> list[str]:
+    """Return up to 5 recent headlines via yfinance (no API key required)."""
+    try:
+        items = yf.Ticker(ticker).news or []
+        headlines = []
+        for item in items[:5]:
+            # yfinance >= 0.2.40 nests the title under content{}
+            title = (
+                (item.get("content") or {}).get("title")
+                or item.get("title")
+                or ""
+            )
+            if title:
+                headlines.append(title)
+        return headlines
+    except Exception:
+        return []
+
+
 def compute_sentiment_alpha(
     tickers: list[str],
     sia: SentimentIntensityAnalyzer,
     api_key: str,
 ) -> tuple[dict[str, float], dict[str, list[str]]]:
     """
-    Fetch headlines for each ticker and return
-    (sentiments_by_ticker, headlines_by_ticker).
+    Fetch headlines for each ticker and return (sentiments_by_ticker, headlines_by_ticker).
+    Uses Finnhub when an API key is available, falls back to yfinance otherwise.
     """
-    sentiments: dict[str, float]       = {}
-    headlines:  dict[str, list[str]]   = {}
+    sentiments: dict[str, float]     = {}
+    headlines:  dict[str, list[str]] = {}
 
     for ticker in tickers:
-        raw_headlines: list[str] = []
+        raw: list[str] = []
         if api_key:
             try:
-                raw_headlines = fetch_ticker_headlines(ticker, api_key)
+                raw = fetch_ticker_headlines_finnhub(ticker, api_key)
             except Exception:
                 pass
-        headlines[ticker] = raw_headlines
-        scores = [sia.polarity_scores(h)['compound'] for h in raw_headlines]
+        if not raw:
+            raw = fetch_ticker_headlines_yf(ticker)
+
+        headlines[ticker] = raw
+        scores = [sia.polarity_scores(h)['compound'] for h in raw]
         sentiments[ticker] = float(np.mean(scores)) if scores else 0.0
 
     return sentiments, headlines
