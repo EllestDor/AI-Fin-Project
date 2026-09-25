@@ -1,145 +1,145 @@
-import streamlit as st
+"""
+app.py — Streamlit entry point for the Global Macro Asset Allocation Dashboard.
+
+Layout
+------
+Tab 1  Live Market Pulse      – treemap of recent 5-day sector performance
+Tab 2  Correlation Heatmap    – dynamic correlation matrix
+Tab 3  Portfolio Sandbox      – AI-augmented Monte Carlo optimiser
+Tab 4  Walk-Forward Backtest  – out-of-sample walk-forward analysis
+Tab 5  Risk/Return Database   – sortable metrics table
+"""
+
+import os
+import subprocess
+
+import numpy as np
 import pandas as pd
 import plotly.express as px
-import numpy as np
 import plotly.graph_objects as go
-import yfinance as yf
-import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer  # type: ignore
-import requests
-import subprocess
-import os
-from datetime import datetime, timedelta
+import streamlit as st
 
-# ==========================================
-# 1. 网页全局设置 (必须在最前面)
-# ==========================================
-st.set_page_config(page_title="Global Macro Dashboard", layout="wide", initial_sidebar_state="expanded")
+from data import (
+    MARKET_TICKERS,
+    compute_sentiment_alpha,
+    fetch_and_calculate_live_data,
+    load_nlp_model,
+)
+from optimizer import run_monte_carlo, walk_forward_backtest
 
-# ==========================================
-# 2. 侧边栏与主题切换 (Light/Dark Mode)
-# ==========================================
+# ============================================================
+# 1. Page config  (must be the first Streamlit call)
+# ============================================================
+st.set_page_config(
+    page_title="Global Macro Dashboard",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ============================================================
+# 2. Sidebar – navigation & theme
+# ============================================================
 st.sidebar.title("Navigation Menu")
 st.sidebar.markdown("Welcome to the **Global Macro Asset Allocation** Engine.")
 st.sidebar.divider()
 
-# 添加主题切换开关
 theme_choice = st.sidebar.radio("UI Theme:", ["Dark Mode 🌙", "Light Mode ☀️"])
 
-# 根据选择动态生成 CSS
 if theme_choice == "Dark Mode 🌙":
-    bg_color = "#0E1117"
-    text_color = "#FFFFFF"
+    bg_color       = "#0E1117"
+    text_color     = "#FFFFFF"
     sub_text_color = "#D4D4D8"
-    tab_bg = "transparent"
-    tab_hover = "rgba(255, 255, 255, 0.08)"
-    tab_selected = "rgba(212, 175, 55, 0.15)"
-    select_bg = "#18181B"
+    tab_hover      = "rgba(255, 255, 255, 0.08)"
+    tab_selected   = "rgba(212, 175, 55, 0.15)"
+    select_bg      = "#18181B"
 else:
-    bg_color = "#F4F4F5"
-    text_color = "#18181B"
+    bg_color       = "#F4F4F5"
+    text_color     = "#18181B"
     sub_text_color = "#3F3F46"
-    tab_bg = "transparent"
-    tab_hover = "rgba(0, 0, 0, 0.05)"
-    tab_selected = "rgba(212, 175, 55, 0.2)"
-    select_bg = "#FFFFFF"
+    tab_hover      = "rgba(0, 0, 0, 0.05)"
+    tab_selected   = "rgba(212, 175, 55, 0.2)"
+    select_bg      = "#FFFFFF"
 
-# 注入动态 CSS
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Vollkorn:ital,wght@0,400..900;1,400..900&display=swap');
-    
-    /* 强制重写 Streamlit 根背景色 */
-    .stApp {{
-        background-color: {bg_color} !important;
+
+    .stApp {{ background-color: {bg_color} !important; }}
+    html, body, [class*="css"] {{
+        font-family: 'Vollkorn', Georgia, 'Times New Roman', Times, serif !important;
+        color: {text_color} !important;
     }}
-    
-    html, body, [class*="css"] {{ font-family: 'Vollkorn', Georgia, 'Times New Roman', Times, serif !important; color: {text_color} !important; }}
-    h1, h2, h3, h4, h5, h6 {{ color: {text_color} !important; font-family: 'Vollkorn', serif !important; }}
-    
-    div[data-testid="stTabs"] > div[role="tablist"] {{ display: flex !important; width: 100% !important; justify-content: space-between !important; gap: 0.5rem !important; border-bottom: none !important; padding-bottom: 1rem !important; }}
-    button[data-baseweb="tab"] {{ flex: 1 !important; display: flex !important; justify-content: center !important; align-items: center !important; padding: 0.6rem 1rem !important; background-color: {tab_bg} !important; border-radius: 12px !important; border: none !important; transition: all 0.25s ease-in-out !important; }}
-    button[data-baseweb="tab"] > div {{ font-size: 1.15rem !important; font-weight: 600 !important; color: {sub_text_color} !important; }}
+    h1, h2, h3, h4, h5, h6 {{
+        color: {text_color} !important;
+        font-family: 'Vollkorn', serif !important;
+    }}
+
+    div[data-testid="stTabs"] > div[role="tablist"] {{
+        display: flex !important; width: 100% !important;
+        justify-content: space-between !important;
+        gap: 0.5rem !important; border-bottom: none !important;
+        padding-bottom: 1rem !important;
+    }}
+    button[data-baseweb="tab"] {{
+        flex: 1 !important; display: flex !important;
+        justify-content: center !important; align-items: center !important;
+        padding: 0.6rem 1rem !important; background-color: transparent !important;
+        border-radius: 12px !important; border: none !important;
+        transition: all 0.25s ease-in-out !important;
+    }}
+    button[data-baseweb="tab"] > div {{
+        font-size: 1.15rem !important; font-weight: 600 !important;
+        color: {sub_text_color} !important;
+    }}
     button[data-baseweb="tab"]:hover {{ background-color: {tab_hover} !important; }}
     button[data-baseweb="tab"]:hover > div {{ color: {text_color} !important; }}
-    button[data-baseweb="tab"][aria-selected="true"] {{ background-color: {tab_selected} !important; }}
-    button[data-baseweb="tab"][aria-selected="true"] > div {{ color: {text_color} !important; font-weight: 800 !important; }}
-    
-    div[data-testid="stSelectbox"] label p {{ font-size: 1.2rem !important; font-weight: 700 !important; color: {text_color} !important; margin-bottom: 0.5rem !important; }}
-    div[data-baseweb="select"] > div {{ background-color: {select_bg} !important; border: 1px solid #3F3F46 !important; }}
-    
+    button[data-baseweb="tab"][aria-selected="true"] {{
+        background-color: {tab_selected} !important;
+    }}
+    button[data-baseweb="tab"][aria-selected="true"] > div {{
+        color: {text_color} !important; font-weight: 800 !important;
+    }}
+
+    div[data-testid="stSelectbox"] label p {{
+        font-size: 1.2rem !important; font-weight: 700 !important;
+        color: {text_color} !important; margin-bottom: 0.5rem !important;
+    }}
+    div[data-baseweb="select"] > div {{
+        background-color: {select_bg} !important; border: 1px solid #3F3F46 !important;
+    }}
     [data-testid="stSidebar"] p {{ color: {sub_text_color} !important; }}
     </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 3. 核心计算引擎：实时数据抓取与处理
-# ==========================================
+# ============================================================
+# 3. Data loading
+# ============================================================
 st.title("Global Macro Asset Allocation Dashboard")
 
-# 定义全局宇宙资产字典
-market_tickers = {
-    'Technology': 'XLK', 'Healthcare': 'XLV', 'Financials': 'XLF',
-    'Consumer Discr': 'XLY', 'Consumer Staples': 'XLP', 'Energy': 'XLE',
-    'Industrials': 'XLI', 'Materials': 'XLB', 'Utilities': 'XLU',
-    'Real Estate': 'XLRE', 'Communications': 'XLC', 
-    'Gold': 'GLD', 'Long Bonds': 'TLT', 'Semiconductors': 'SMH', 'Cloud': 'SKYY'
-}
+PLOT_BG = "rgba(0,0,0,0)"
 
-@st.cache_data(ttl=3600) # 缓存1小时，防止频繁请求被封
-def fetch_and_calculate_live_data():
-    tickers = list(market_tickers.values())
-    
-    # 1. 抓取过去 1 年的历史日线数据
-    raw_data = yf.download(tickers, period="1y")['Close']
-    
-    # 2. 实时计算日收益率
-    # dropna(how="all") 只丢弃整行都缺失的日期；保留单个 ticker 偶发缺失的行，
-    # 让 mean/std/cov/corr 等统计量按列自动跳过 NaN，避免一个 ticker 的缺失拖垮全部数据
-    daily_returns = raw_data.pct_change().dropna(how="all")
-    
-    # 3. 实时计算年化收益率和波动率 (基于 252 个交易日)
-    ann_return = daily_returns.mean() * 252
-    ann_volatility = daily_returns.std() * np.sqrt(252)
-    
-    # 4. 构建实时的 Summary DataFrame
-    summary_df = pd.DataFrame({
-        'Sector': list(market_tickers.keys()),
-        'Ticker': tickers,
-        'Ann_Return': ann_return.reindex(tickers).values,
-        'Volatility': ann_volatility.reindex(tickers).values
-    })
-    
-    # 计算 Sharpe Ratio (假设无风险利率为 0.02)
-    risk_free_rate = 0.02
-    summary_df['Sharpe_Ratio'] = (summary_df['Ann_Return'] - risk_free_rate) / summary_df['Volatility']
-    
-    # 记录最后更新时间
-    update_time = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-    
-    return daily_returns, summary_df, update_time
 
-def get_deployed_version():
-    """读取当前部署所对应的 git commit，用于在侧边栏确认线上版本"""
+def get_deployed_version() -> tuple[str, str]:
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     try:
         commit_hash = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=repo_dir, stderr=subprocess.DEVNULL
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_dir, stderr=subprocess.DEVNULL,
         ).decode().strip()
         commit_date = subprocess.check_output(
-            ["git", "log", "-1", "--format=%cd", "--date=format:%m/%d %H:%M"], cwd=repo_dir, stderr=subprocess.DEVNULL
+            ["git", "log", "-1", "--format=%cd", "--date=format:%m/%d %H:%M"],
+            cwd=repo_dir, stderr=subprocess.DEVNULL,
         ).decode().strip()
-        return commit_hash, commit_date
     except Exception:
-        return "unknown", "unknown"
+        commit_hash, commit_date = "unknown", "unknown"
+    return commit_hash, commit_date
+
 
 with st.spinner("Initializing live market data engine..."):
     try:
         live_returns_df, live_summary_df, last_update_str = fetch_and_calculate_live_data()
 
-        # 在侧边栏显示更新时间
         st.sidebar.success(f"🟢 Live Data Active\n\nLast Updated: \n{last_update_str}")
-
         if st.sidebar.button("🔄 Refresh Live Data", use_container_width=True):
             fetch_and_calculate_live_data.clear()
             st.rerun()
@@ -149,175 +149,183 @@ with st.spinner("Initializing live market data engine..."):
         st.sidebar.divider()
 
     except Exception as e:
-        st.error(f"Failed to fetch live data from Yahoo Finance. Please try again later. Error: {e}")
-        st.stop() # 如果数据抓取失败，停止渲染后续内容
-
-# NLP 模型加载
-@st.cache_resource
-def load_nlp_model():
-    try:
-        nltk.data.find('sentiment/vader_lexicon.zip')
-    except LookupError:
-        nltk.download('vader_lexicon', quiet=True)
-    return SentimentIntensityAnalyzer()
+        st.error(f"Failed to fetch live data from Yahoo Finance. Error: {e}")
+        st.stop()
 
 sia = load_nlp_model()
 
-# 真实新闻抓取 (Finnhub Company News API)，按 ticker 缓存 30 分钟以避开免费额度限制
-NEWS_LOOKBACK_DAYS = 3
-
-@st.cache_data(ttl=1800)
-def fetch_ticker_headlines(ticker, api_key):
-    end = datetime.now().date()
-    start = end - timedelta(days=NEWS_LOOKBACK_DAYS)
-    resp = requests.get(
-        "https://finnhub.io/api/v1/company-news",
-        params={"symbol": ticker, "from": start.isoformat(), "to": end.isoformat(), "token": api_key},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    articles = resp.json()
-    return [a["headline"] for a in articles[:5] if a.get("headline")]
-
-# ==========================================
-# 4. Tabs Layout (调整顺序)
-# ==========================================
-tab_pulse, tab_heatmap, tab_opt, tab_database = st.tabs([
-    "Live Market Pulse",     
-    "Correlation Heatmap",  
+# ============================================================
+# 4. Tab layout
+# ============================================================
+tab_pulse, tab_heatmap, tab_opt, tab_wf, tab_database = st.tabs([
+    "Live Market Pulse",
+    "Correlation Heatmap",
     "Portfolio Sandbox",
-    "Risk/Return Database"  # 移到最后
+    "Walk-Forward Backtest",
+    "Risk/Return Database",
 ])
 
-# ----------------- Tab 1: Live Pulse -----------------
+# --------------------------------------------------------
+# Tab 1 – Live Market Pulse
+# --------------------------------------------------------
 with tab_pulse:
     st.markdown("### 🌐 Global Market Pulse")
-    
-    # 计算近 5 日表现用于树状图（向量化复利计算，自动适配可用交易日数量）
-    recent_5d_returns = (1 + live_returns_df.tail(5)).prod() - 1
-    
+
+    recent_5d = (1 + live_returns_df.tail(5)).prod() - 1
     perf_df = pd.DataFrame({
-        'Sector': list(market_tickers.keys()),
-        'Ticker': list(market_tickers.values()),
-        'Performance': recent_5d_returns.reindex(market_tickers.values()).values
+        'Sector':      list(MARKET_TICKERS.keys()),
+        'Ticker':      list(MARKET_TICKERS.values()),
+        'Performance': recent_5d.reindex(MARKET_TICKERS.values()).values,
     })
-    perf_df['Weight'] = 1 
-    perf_df['Label'] = perf_df['Sector'] + "<br>" + perf_df['Performance'].apply(lambda x: f"{x*100:.2f}%")
-    
-    best_sector = perf_df.loc[perf_df['Performance'].idxmax()]
-    worst_sector = perf_df.loc[perf_df['Performance'].idxmin()]
-    
-    st.info(f"**💡 Quant Insight (Trailing 5D):** **{best_sector['Sector']}** is leading the market ({best_sector['Performance']*100:.2f}%), while **{worst_sector['Sector']}** is lagging.")
+    perf_df['Weight'] = 1
+    perf_df['Label'] = (
+        perf_df['Sector'] + "<br>" +
+        perf_df['Performance'].apply(lambda x: f"{x*100:.2f}%")
+    )
+
+    best   = perf_df.loc[perf_df['Performance'].idxmax()]
+    worst  = perf_df.loc[perf_df['Performance'].idxmin()]
+    st.info(
+        f"**💡 Quant Insight (Trailing 5D):** "
+        f"**{best['Sector']}** is leading ({best['Performance']*100:.2f}%), "
+        f"while **{worst['Sector']}** is lagging."
+    )
 
     fig_tree = px.treemap(
-        perf_df, path=[px.Constant("Global Macro Universe"), 'Label'], values='Weight',
-        color='Performance', color_continuous_scale=['#FF4B4B', '#18181B', '#00C853'], color_continuous_midpoint=0
+        perf_df,
+        path=[px.Constant("Global Macro Universe"), 'Label'],
+        values='Weight',
+        color='Performance',
+        color_continuous_scale=['#FF4B4B', '#18181B', '#00C853'],
+        color_continuous_midpoint=0,
     )
-    
-    # 根据主题动态调整树状图背景
-    plot_bg = 'rgba(0,0,0,0)'
-    fig_tree.update_layout(margin=dict(t=20, l=0, r=0, b=0), paper_bgcolor=plot_bg, plot_bgcolor=plot_bg, coloraxis_showscale=False)
-    # 根据主题调整树状图字体颜色 (如果底色是红/绿/黑，白字依然适用)
-    fig_tree.update_traces(textfont=dict(family="Vollkorn", size=18, color="white"), textinfo="label")
+    fig_tree.update_layout(
+        margin=dict(t=20, l=0, r=0, b=0),
+        paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
+        coloraxis_showscale=False,
+    )
+    fig_tree.update_traces(
+        textfont=dict(family="Vollkorn", size=18, color="white"),
+        textinfo="label",
+    )
     st.plotly_chart(fig_tree, use_container_width=True)
 
-# ----------------- Tab 2: Heatmap -----------------
+
+# --------------------------------------------------------
+# Tab 2 – Correlation Heatmap
+# --------------------------------------------------------
 with tab_heatmap:
     st.markdown("### 🔗 Real-time Correlation Matrix")
     st.markdown("Calculated dynamically using the latest 1-year daily returns.")
-    
-    # 使用实时计算的 daily_returns 进行相关性分析
-    selected_tickers = st.multiselect("Select assets to compare:", list(market_tickers.values()), default=['XLK', 'XLV', 'XLF', 'XLE', 'TLT', 'GLD'])
-    
+
+    selected_tickers = st.multiselect(
+        "Select assets to compare:",
+        list(MARKET_TICKERS.values()),
+        default=['XLK', 'XLV', 'XLF', 'XLE', 'TLT', 'GLD'],
+    )
+
     if len(selected_tickers) > 1:
         corr_matrix = live_returns_df[selected_tickers].corr()
-        fig_corr = px.imshow(corr_matrix, text_auto=".2f", aspect="auto", color_continuous_scale="RdYlBu_r", zmin=-0.5, zmax=1)
-        fig_corr.update_layout(height=600, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=text_color))
+        fig_corr = px.imshow(
+            corr_matrix, text_auto=".2f", aspect="auto",
+            color_continuous_scale="RdYlBu_r", zmin=-0.5, zmax=1,
+        )
+        fig_corr.update_layout(
+            height=600, margin=dict(l=0, r=0, t=30, b=0),
+            paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
+            font=dict(color=text_color),
+        )
         st.plotly_chart(fig_corr, use_container_width=True)
     else:
         st.warning("Please select at least 2 assets.")
 
-# ----------------- Tab 3: Portfolio Sandbox -----------------
+
+# --------------------------------------------------------
+# Tab 3 – Portfolio Sandbox
+# --------------------------------------------------------
 with tab_opt:
     st.markdown("### 🧪 AI-Augmented Portfolio Sandbox")
-    st.markdown("Simulate optimal portfolios using **Live Historical Data** overlayed with NLP Sentiment Alpha.")
-    
+    st.markdown(
+        "Simulate optimal portfolios using **Live Historical Data** "
+        "overlayed with NLP Sentiment Alpha."
+    )
+
     col_input1, col_input2 = st.columns([2, 1])
     with col_input1:
-        selected_opt_assets = st.multiselect("Select Assets for Optimization:", list(market_tickers.values()), default=['XLK', 'TLT', 'GLD', 'XLE'], key='opt_select')
+        opt_assets = st.multiselect(
+            "Select Assets for Optimization:",
+            list(MARKET_TICKERS.values()),
+            default=['XLK', 'TLT', 'GLD', 'XLE'],
+            key='opt_select',
+        )
     with col_input2:
         alpha_weight = st.slider("NLP Sentiment Alpha Weight", 0.0, 0.1, 0.05, 0.01)
 
-    if len(selected_opt_assets) >= 2:
+    if len(opt_assets) >= 2:
         with st.spinner("Running Monte Carlo Simulation..."):
-            # 提取选定资产的实时年化数据
-            df_selected_live = live_returns_df[selected_opt_assets]
-            base_mean_returns = df_selected_live.mean() * 252
-            cov_matrix = df_selected_live.cov() * 252
-            
-            # 用 Finnhub 抓取每个 ticker 最近的真实新闻标题，再用 VADER 打分
-            # st.secrets 在完全没有 secrets.toml 时会抛 StreamlitSecretNotFoundError，而不是返回空字典
             try:
-                finnhub_api_key = st.secrets.get("FINNHUB_API_KEY", "")
+                finnhub_key = st.secrets.get("FINNHUB_API_KEY", "")
             except Exception:
-                finnhub_api_key = ""
-            current_sentiments = {}
-            headlines_by_ticker = {}
-            for ticker in selected_opt_assets:
-                headlines = []
-                if finnhub_api_key:
-                    try:
-                        headlines = fetch_ticker_headlines(ticker, finnhub_api_key)
-                    except Exception:
-                        headlines = []
-                headlines_by_ticker[ticker] = headlines
-                scores = [sia.polarity_scores(h)['compound'] for h in headlines]
-                current_sentiments[ticker] = np.mean(scores) if scores else 0.0
+                finnhub_key = ""
 
-            if not finnhub_api_key:
-                st.caption("⚠️ No FINNHUB_API_KEY found in secrets — sentiment alpha defaults to neutral (0.0). Add your key to .streamlit/secrets.toml (local) or the app's Secrets settings (Streamlit Cloud) to enable live news sentiment.")
+            sentiments, headlines_map = compute_sentiment_alpha(opt_assets, sia, finnhub_key)
+
+            if not finnhub_key:
+                st.caption(
+                    "⚠️ No FINNHUB_API_KEY found — sentiment alpha defaults to 0.0. "
+                    "Add your key to `.streamlit/secrets.toml` to enable live news sentiment."
+                )
 
             with st.expander("📰 Headlines driving the sentiment alpha"):
-                for ticker in selected_opt_assets:
-                    st.markdown(f"**{ticker}** — avg sentiment: `{current_sentiments[ticker]:+.3f}`")
-                    if headlines_by_ticker[ticker]:
-                        for h in headlines_by_ticker[ticker]:
-                            st.caption(f"• {h}")
-                    else:
+                for ticker in opt_assets:
+                    st.markdown(f"**{ticker}** — avg sentiment: `{sentiments[ticker]:+.3f}`")
+                    for h in headlines_map[ticker]:
+                        st.caption(f"• {h}")
+                    if not headlines_map[ticker]:
                         st.caption("• No recent headlines found")
 
-            adjusted_returns = base_mean_returns.copy()
-            for ticker in selected_opt_assets:
-                adjusted_returns[ticker] += (current_sentiments[ticker] * alpha_weight)
-            
-            num_portfolios = 2000 # 减少模拟次数提高响应速度
-            n_assets = len(selected_opt_assets)
-
-            # Dirichlet(1,...,1) 才是在单纯形上的均匀采样；"均匀随机后归一化"会向等权组合偏移
-            weights_record = np.random.dirichlet(np.ones(n_assets), num_portfolios)
-
-            portfolio_returns = weights_record @ adjusted_returns.values
-            portfolio_variances = np.einsum('ij,jk,ik->i', weights_record, cov_matrix.values, weights_record)
-            portfolio_std_devs = np.sqrt(portfolio_variances)
-
-            results = np.vstack([portfolio_std_devs, portfolio_returns, portfolio_returns / portfolio_std_devs])
-            max_sharpe_idx = np.argmax(results[2])
-
-            best_weights = pd.Series(weights_record[max_sharpe_idx], index=selected_opt_assets).sort_values()
+            result = run_monte_carlo(
+                live_returns_df, opt_assets,
+                sentiment_alpha=sentiments,
+                alpha_weight=alpha_weight,
+            )
 
             fig_opt = go.Figure()
-            fig_opt.add_trace(go.Scatter(x=results[0,:], y=results[1,:], mode='markers', marker=dict(size=4, color=results[2,:], colorscale='Viridis', showscale=True), name='Simulated Portfolios', hoverinfo='none'))
-            fig_opt.add_trace(go.Scatter(x=[results[0, max_sharpe_idx]], y=[results[1, max_sharpe_idx]], mode='markers+text', marker=dict(color='#D4AF37', size=16, symbol='star'), name='Max Sharpe', text=['Max Sharpe'], textposition="top center"))
-            fig_opt.update_layout(xaxis_title="Predicted Volatility (Risk)", yaxis_title="AI-Adjusted Expected Return", height=400, margin=dict(l=0, r=0, t=30, b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color=text_color))
-
-            fig_weights = go.Figure(go.Bar(
-                x=best_weights.values * 100, y=best_weights.index, orientation='h',
-                marker=dict(color='#D4AF37'),
-                text=[f"{w*100:.1f}%" for w in best_weights.values], textposition='outside'
+            fig_opt.add_trace(go.Scatter(
+                x=result.sim_std_devs, y=result.sim_returns,
+                mode='markers',
+                marker=dict(size=4, color=result.sim_sharpes, colorscale='Viridis', showscale=True),
+                name='Simulated Portfolios', hoverinfo='none',
             ))
-            # 给最长的条形留出空间，避免标签被裁掉
-            fig_weights.update_xaxes(range=[0, best_weights.values.max() * 100 * 1.25])
-            fig_weights.update_layout(title="Max Sharpe Allocation", xaxis_title="Weight (%)", height=400, margin=dict(l=0, r=20, t=40, b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color=text_color))
+            fig_opt.add_trace(go.Scatter(
+                x=[result.sim_std_devs[result.max_sharpe_idx]],
+                y=[result.sim_returns[result.max_sharpe_idx]],
+                mode='markers+text',
+                marker=dict(color='#D4AF37', size=16, symbol='star'),
+                name='Max Sharpe', text=['Max Sharpe'], textposition="top center",
+            ))
+            fig_opt.update_layout(
+                xaxis_title="Predicted Volatility (Risk)",
+                yaxis_title="AI-Adjusted Expected Return",
+                height=400, margin=dict(l=0, r=0, t=30, b=0),
+                plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                font=dict(color=text_color),
+            )
+
+            best_w = result.weights
+            fig_weights = go.Figure(go.Bar(
+                x=best_w.values * 100, y=best_w.index, orientation='h',
+                marker=dict(color='#D4AF37'),
+                text=[f"{w*100:.1f}%" for w in best_w.values],
+                textposition='outside',
+            ))
+            fig_weights.update_xaxes(range=[0, best_w.values.max() * 100 * 1.25])
+            fig_weights.update_layout(
+                title="Max Sharpe Allocation", xaxis_title="Weight (%)",
+                height=400, margin=dict(l=0, r=20, t=40, b=0),
+                plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                font=dict(color=text_color),
+            )
 
             col_frontier, col_weights = st.columns([2, 1])
             with col_frontier:
@@ -325,14 +333,136 @@ with tab_opt:
             with col_weights:
                 st.plotly_chart(fig_weights, use_container_width=True)
 
-# ----------------- Tab 4: Database -----------------
+
+# --------------------------------------------------------
+# Tab 4 – Walk-Forward Backtest
+# --------------------------------------------------------
+with tab_wf:
+    st.markdown("### 🔄 Walk-Forward Backtest")
+    st.markdown(
+        "Each window optimises weights on a **training period**, then evaluates "
+        "performance on the immediately following **out-of-sample test period**. "
+        "No look-ahead bias — the optimiser never sees the test data."
+    )
+
+    col_wf1, col_wf2, col_wf3 = st.columns(3)
+    with col_wf1:
+        wf_assets = st.multiselect(
+            "Assets",
+            list(MARKET_TICKERS.values()),
+            default=['XLK', 'TLT', 'GLD', 'XLE', 'XLV'],
+            key='wf_assets',
+        )
+    with col_wf2:
+        train_months = st.selectbox("Training window", [3, 6, 9, 12], index=1)
+        train_days   = int(train_months * 21)
+    with col_wf3:
+        test_months = st.selectbox("Test window", [1, 2, 3], index=0)
+        test_days   = int(test_months * 21)
+
+    if len(wf_assets) < 2:
+        st.warning("Please select at least 2 assets.")
+    else:
+        if st.button("▶ Run Walk-Forward Backtest", type="primary"):
+            with st.spinner("Running walk-forward optimisation…"):
+                try:
+                    wf = walk_forward_backtest(
+                        live_returns_df, wf_assets,
+                        train_window=train_days,
+                        test_window=test_days,
+                    )
+                except ValueError as exc:
+                    st.error(str(exc))
+                    st.stop()
+
+            # ── Summary metrics ──────────────────────────────────────────
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("OOS CAGR",        f"{wf.cagr*100:.2f}%")
+            m2.metric("Ann. Volatility", f"{wf.ann_volatility*100:.2f}%")
+            m3.metric("Sharpe Ratio",    f"{wf.sharpe_ratio:.2f}")
+            m4.metric("Max Drawdown",    f"{wf.max_drawdown*100:.2f}%")
+
+            # ── Cumulative growth chart ──────────────────────────────────
+            fig_cum = go.Figure()
+            fig_cum.add_trace(go.Scatter(
+                x=wf.cumulative_curve.index,
+                y=wf.cumulative_curve.values,
+                mode='lines', line=dict(color='#D4AF37', width=2),
+                name='Walk-Forward Portfolio',
+                hovertemplate="%{x|%Y-%m-%d}<br>Growth: %{y:.3f}<extra></extra>",
+            ))
+            fig_cum.add_hline(y=1.0, line_dash="dot", line_color="gray", opacity=0.5)
+            fig_cum.update_layout(
+                title="Cumulative OOS Growth (starting at 1.0)",
+                xaxis_title="Date", yaxis_title="Portfolio Value",
+                height=350, margin=dict(l=0, r=0, t=40, b=0),
+                plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                font=dict(color=text_color),
+            )
+            st.plotly_chart(fig_cum, use_container_width=True)
+
+            # ── Per-window OOS returns bar chart ────────────────────────
+            ws = wf.window_summary.reset_index()
+            fig_bar = go.Figure(go.Bar(
+                x=ws["window"].astype(str),
+                y=ws["oos_return"] * 100,
+                marker_color=np.where(ws["oos_return"] >= 0, '#00C853', '#FF4B4B'),
+                hovertemplate="Window %{x}<br>OOS Return: %{y:.2f}%<extra></extra>",
+            ))
+            fig_bar.update_layout(
+                title="OOS Return per Window",
+                xaxis_title="Window #", yaxis_title="Return (%)",
+                height=280, margin=dict(l=0, r=0, t=40, b=0),
+                plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                font=dict(color=text_color),
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+            # ── Per-window allocation heatmap ────────────────────────────
+            weight_cols = [c for c in wf.window_summary.columns if c in wf_assets]
+            weight_df   = wf.window_summary[weight_cols].T
+
+            fig_hw = px.imshow(
+                weight_df,
+                text_auto=".0%",
+                color_continuous_scale="YlOrBr",
+                aspect="auto",
+                labels=dict(x="Window #", y="Asset", color="Weight"),
+            )
+            fig_hw.update_layout(
+                title="Optimal Weights per Window",
+                height=max(200, len(wf_assets) * 45),
+                margin=dict(l=0, r=0, t=40, b=0),
+                paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
+                font=dict(color=text_color),
+            )
+            st.plotly_chart(fig_hw, use_container_width=True)
+
+            # ── Full window table ────────────────────────────────────────
+            with st.expander("📋 Window-by-window detail"):
+                display_ws = wf.window_summary.copy()
+                display_ws["oos_return"] = display_ws["oos_return"].map("{:.2%}".format)
+                display_ws["oos_sharpe"] = display_ws["oos_sharpe"].map(
+                    lambda x: f"{x:.2f}" if pd.notna(x) else "—"
+                )
+                for col in weight_cols:
+                    display_ws[col] = display_ws[col].map("{:.1%}".format)
+                st.dataframe(display_ws, use_container_width=True)
+
+
+# --------------------------------------------------------
+# Tab 5 – Risk/Return Database
+# --------------------------------------------------------
 with tab_database:
     st.markdown("### 📊 Live Asset Risk & Return Summary")
     st.markdown("Metrics calculated dynamically based on the trailing 1-year daily close prices.")
-    
-    # 保持数值类型（而非格式化字符串），这样点击表头才能按数值正确排序；
-    # 显示格式交给 column_config 处理
-    display_data = live_summary_df.sort_values('Sharpe_Ratio', ascending=False).set_index('Sector').copy()
+
+    display_data = (
+        live_summary_df
+        .sort_values('Sharpe_Ratio', ascending=False)
+        .set_index('Sector')
+        .copy()
+    )
     display_data['Ann_Return'] *= 100
     display_data['Volatility'] *= 100
 
@@ -341,8 +471,8 @@ with tab_database:
         use_container_width=True,
         height=500,
         column_config={
-            "Ann_Return": st.column_config.NumberColumn("Ann. Return", format="%.2f%%"),
-            "Volatility": st.column_config.NumberColumn("Volatility", format="%.2f%%"),
+            "Ann_Return":   st.column_config.NumberColumn("Ann. Return",  format="%.2f%%"),
+            "Volatility":   st.column_config.NumberColumn("Volatility",   format="%.2f%%"),
             "Sharpe_Ratio": st.column_config.NumberColumn("Sharpe Ratio", format="%.2f"),
-        }
+        },
     )
