@@ -46,53 +46,62 @@ st.sidebar.divider()
 theme_choice = st.sidebar.radio("UI Theme:", ["Dark Mode 🌙", "Light Mode ☀️"])
 
 if theme_choice == "Dark Mode 🌙":
-    bg_color       = "#0D1117"   # GitHub-dark base
+    # ── Dark palette ────────────────────────────────────────
+    bg_color       = "#0D1117"
     sidebar_bg     = "#161B22"
     card_bg        = "#161B22"
     border_color   = "#30363D"
-    text_color     = "#E6EDF3"   # GitHub-dark primary text
-    sub_text_color = "#8B949E"   # GitHub-dark secondary text
+    text_color     = "#E6EDF3"
+    sub_text_color = "#8B949E"
     input_bg       = "#21262D"
     tab_hover      = "rgba(255,255,255,0.07)"
     tab_selected   = "rgba(212,175,55,0.18)"
     accent         = "#D4AF37"
+    # chart-specific — gold is legible on dark; near-black makes a good
+    # neutral midpoint in the treemap; faint white for reference lines
+    chart_accent   = "#D4AF37"
+    chart_neutral  = "#1C2128"   # near-bg, soft midpoint for treemap zero band
+    chart_hline    = "rgba(255,255,255,0.20)"
 else:
+    # ── Light palette ───────────────────────────────────────
     bg_color       = "#FFFFFF"
-    sidebar_bg     = "#F6F6F4"   # Claude-style off-white sidebar
+    sidebar_bg     = "#F6F6F4"
     card_bg        = "#F9F9F7"
     border_color   = "#E5E5E3"
-    text_color     = "#1A1A1A"   # near-black — maximum readability
-    sub_text_color = "#555555"   # solid mid-gray, clearly readable on white
+    text_color     = "#1A1A1A"
+    sub_text_color = "#4A4A4A"   # darkened from #555 → richer contrast on white
     input_bg       = "#F0F0EE"
     tab_hover      = "rgba(0,0,0,0.05)"
     tab_selected   = "rgba(180,138,30,0.12)"
-    accent         = "#B8920A"   # slightly darker gold for light bg legibility
+    accent         = "#B8920A"
+    # chart-specific — #9B6F00 gives ~4.7:1 on white (WCAG AA); mid-gray for
+    # treemap zero band; faint dark line for reference baselines
+    chart_accent   = "#9B6F00"
+    chart_neutral  = "#C8C8C8"   # light gray midpoint, readable on white
+    chart_hline    = "rgba(0,0,0,0.18)"
 
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vollkorn:ital,wght@0,400;0,600;0,700;1,400&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
     /* ── Base ─────────────────────────────────────────────── */
     .stApp {{ background-color: {bg_color} !important; }}
 
-    /* Apply Inter to text nodes only — exclude span so icon glyphs aren't broken */
-    html, body, [class*="css"],
+    /* Exclude [data-testid="stIconMaterial"] at selector level so Streamlit's
+       DynamicIcon spans (expander arrows, sidebar collapse, tab overflow arrows,
+       dropdown chevrons — all confirmed to use this single testid) are never
+       matched by this rule and their "Material Symbols Rounded" font is preserved. */
+    html, body, [class*="css"]:not([data-testid="stIconMaterial"]),
     p, div, li, td, th, label, input, textarea, select {{
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         color: {text_color} !important;
     }}
-    /* Restore Material Symbols/Icons after the broad override above */
-    .material-symbols-outlined,
-    .material-icons,
-    span.material-symbols-outlined,
-    span.material-icons {{
-        font-family: 'Material Symbols Outlined', 'Material Icons' !important;
-        font-feature-settings: 'liga' !important;
-        -webkit-font-feature-settings: 'liga' !important;
-        font-style: normal !important;
-        font-weight: normal !important;
-        color: inherit !important;
+    /* Belt-and-suspenders: explicitly restore the confirmed font name for icon spans
+       so that any path that still matches them gets the right font. */
+    [data-testid="stIconMaterial"] {{
+        font-family: "Material Symbols Rounded" !important;
+        font-feature-settings: "liga" !important;
+        -webkit-font-feature-settings: "liga" !important;
     }}
 
     /* ── Page title — responsive, clear of sidebar arrow ──── */
@@ -132,7 +141,15 @@ st.markdown(f"""
         color: {sub_text_color} !important;
         font-size: 0.85rem !important;
     }}
-    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h1 {{
+        color: {text_color} !important;
+        font-family: 'Vollkorn', Georgia, serif !important;
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+        word-spacing: normal !important;
+        padding-right: 0 !important;
+        margin-bottom: 0.4rem !important;
+    }}
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3 {{
         color: {text_color} !important;
@@ -281,20 +298,6 @@ st.markdown(f"""
         [data-testid="stMetricValue"] {{ font-size: 1rem !important; }}
     }}
 
-    /* ── Icon-font exception — last rule wins the cascade ─── */
-    /* Resets font-family for every element that renders a glyph via
-       an icon font (Material Icons, BaseWeb icons, inline SVGs, and
-       any Streamlit element whose data-testid contains "Icon").
-       Placed last so it overrides the broad [class*="css"] rule above
-       at equal !important specificity. */
-    [data-testid="stExpanderIcon"],
-    [data-testid*="Icon"],
-    [data-baseweb="icon"],
-    svg,
-    [class*="material-icons"],
-    [class*="material-symbols"] {{
-        font-family: initial !important;
-    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -383,7 +386,7 @@ with tab_pulse:
         path=[px.Constant("Global Macro Universe"), 'Label'],
         values='Weight',
         color='Performance',
-        color_continuous_scale=['#FF4B4B', '#18181B', '#00C853'],
+        color_continuous_scale=['#FF4B4B', chart_neutral, '#00C853'],
         color_continuous_midpoint=0,
     )
     fig_tree.update_layout(
@@ -488,7 +491,7 @@ with tab_opt:
                 x=[result.sim_std_devs[result.max_sharpe_idx]],
                 y=[result.sim_returns[result.max_sharpe_idx]],
                 mode='markers+text',
-                marker=dict(color='#D4AF37', size=16, symbol='star'),
+                marker=dict(color=chart_accent, size=16, symbol='star'),
                 name='Max Sharpe', text=['Max Sharpe'], textposition="top center",
             ))
             fig_opt.update_layout(
@@ -502,7 +505,7 @@ with tab_opt:
             best_w = result.weights
             fig_weights = go.Figure(go.Bar(
                 x=best_w.values * 100, y=best_w.index, orientation='h',
-                marker=dict(color='#D4AF37'),
+                marker=dict(color=chart_accent),
                 text=[f"{w*100:.1f}%" for w in best_w.values],
                 textposition='outside',
             ))
@@ -574,11 +577,11 @@ with tab_wf:
             fig_cum.add_trace(go.Scatter(
                 x=wf.cumulative_curve.index,
                 y=wf.cumulative_curve.values,
-                mode='lines', line=dict(color='#D4AF37', width=2),
+                mode='lines', line=dict(color=chart_accent, width=2),
                 name='Walk-Forward Portfolio',
                 hovertemplate="%{x|%Y-%m-%d}<br>Growth: %{y:.3f}<extra></extra>",
             ))
-            fig_cum.add_hline(y=1.0, line_dash="dot", line_color="gray", opacity=0.5)
+            fig_cum.add_hline(y=1.0, line_dash="dot", line_color=chart_hline, opacity=1.0)
             fig_cum.update_layout(
                 title="Cumulative OOS Growth (starting at 1.0)",
                 xaxis_title="Date", yaxis_title="Portfolio Value",
