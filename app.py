@@ -144,11 +144,18 @@ st.markdown(f"""
     [data-testid="stSidebar"] h1 {{
         color: {text_color} !important;
         font-family: 'Vollkorn', Georgia, serif !important;
-        font-size: 1.5rem !important;
+        /* Scale up to a clear title size; clamp prevents overflow on narrow sidebars */
+        font-size: clamp(1.5rem, 10cqi, 2rem) !important;
         font-weight: 700 !important;
+        line-height: 1.15 !important;
+        letter-spacing: -0.01em !important;
         word-spacing: normal !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
         padding-right: 0 !important;
-        margin-bottom: 0.4rem !important;
+        margin-bottom: 0.5rem !important;
     }}
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3 {{
